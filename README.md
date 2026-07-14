@@ -8,6 +8,7 @@ Social marketplace connecting users with hosts for per-hour sessions and events.
 # Backend (http://localhost:8000)
 cd backend
 pip install -r requirements.txt
+alembic upgrade head        # create/update tables (or `python seed.py` for demo data)
 python -m uvicorn app.main:app --reload
 
 # Web (http://localhost:5173)
@@ -31,9 +32,11 @@ npm run dev
 | `FRONTEND_URL` | for payments | Where Stripe redirects after checkout |
 | `STRIPE_ALLOW_LIVE` | prod only | Must be `true` before a `sk_live_` key will charge |
 
-Run with: `uvicorn app.main:app --host 0.0.0.0 --port 8000` (behind any HTTPS proxy/platform — Railway, Render, Fly, etc.)
+Run migrations on every deploy: `alembic upgrade head` (the app no longer creates tables at startup — Alembic owns the schema). After changing a model, generate a migration with `alembic revision --autogenerate -m "describe change"` and commit it.
 
-**Web** — set `VITE_API_URL` to the backend URL, then `npm run build` and serve `dist/` from any static host (Vercel, Netlify, Cloudflare Pages).
+Run with: `uvicorn app.main:app --host 0.0.0.0 --port 8000` (behind any HTTPS proxy/platform — Railway, Render, Fly, etc.). On **Vercel**, deploy `backend/` as its own project — `backend/vercel.json` + `backend/api/index.py` expose the app as a Python serverless function; run `alembic upgrade head` against your Postgres once per schema change (Vercel has no persistent disk, so Postgres is required, not optional).
+
+**Web** — set `VITE_API_URL` to the backend URL, then `npm run build` and serve `dist/` from any static host. On **Vercel**, deploy `web/` as its own project (Vite auto-detected; `web/vercel.json` handles SPA routing).
 
 **Mobile** — set `EXPO_PUBLIC_API_URL` to the backend URL before building with EAS.
 

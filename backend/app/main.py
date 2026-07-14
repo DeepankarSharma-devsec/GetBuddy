@@ -9,9 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
 
 from . import models, schemas, auth
-from .database import engine, Base, get_db
+from .database import engine, get_db
 
-Base.metadata.create_all(bind=engine)
+# Schema is managed by Alembic migrations — run `alembic upgrade head` on deploy.
+# (Serverless has no startup hook to migrate; don't create tables at import time.)
 
 app = FastAPI(title="GetBuddy API")
 
