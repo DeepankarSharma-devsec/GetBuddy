@@ -5,15 +5,18 @@ from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app.database import engine, Base, SessionLocal
+from app.database import SessionLocal
 from app.models import User, HostProfile, Event
 
 def seed():
-    print("Rebuilding database...")
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-
+    # Schema is owned by Alembic (run `alembic upgrade head` first). This only
+    # inserts demo rows, and bails if data already exists so it's safe to re-run.
     db = SessionLocal()
+    if db.query(User).first():
+        print("Database already has data — skipping seed. Clear the tables first to reseed.")
+        db.close()
+        return
+    print("Seeding demo data...")
     pw = bcrypt.hashpw("password123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
     # 1. Admin
