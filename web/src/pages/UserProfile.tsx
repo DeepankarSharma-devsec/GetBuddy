@@ -40,7 +40,8 @@ export default function UserProfile() {
                 {user.city || 'CITY NOT SET'}{user.country ? ` · ${countryName(user.country).toUpperCase()}` : ''}{user.is_host ? ' · HOST' : ''}{user.is_admin ? ' · ADMIN' : ''}
               </div>
             </div>
-            {user.is_host ? (
+            {/* Admins are platform staff — no host/guest actions */}
+            {user.is_admin ? null : user.is_host ? (
               <button className="btn btn-primary" onClick={() => navigate('/host/dashboard')}>Host dashboard →</button>
             ) : user.host_status === 'PENDING' ? (
               <button className="btn btn-subtle" onClick={() => navigate('/host/dashboard')}>Application under review</button>
@@ -50,13 +51,16 @@ export default function UserProfile() {
           </div>
 
           <div className="grid grid-2" style={{ marginBottom: 20 }}>
-            <ProfileTile label="My bookings" hint="Upcoming and past seats" onClick={() => navigate('/my-bookings')} />
-            <ProfileTile label="Discover" hint="Find new experiences" onClick={() => navigate('/explore')} />
-            {user.is_host && (
-              <ProfileTile label="Edit host profile" hint="Bio, category, city" onClick={() => navigate('/host/onboarding/profile')} />
-            )}
-            {user.is_admin && (
+            {user.is_admin ? (
               <ProfileTile label="Admin overview" hint="Platform metrics & moderation" onClick={() => navigate('/admin/dashboard')} />
+            ) : (
+              <>
+                <ProfileTile label="My bookings" hint="Upcoming and past seats" onClick={() => navigate('/my-bookings')} />
+                <ProfileTile label="Discover" hint="Find new experiences" onClick={() => navigate('/explore')} />
+                {user.is_host && (
+                  <ProfileTile label="Edit host profile" hint="Bio, category, city" onClick={() => navigate('/host/onboarding/profile')} />
+                )}
+              </>
             )}
           </div>
 

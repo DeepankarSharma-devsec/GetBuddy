@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { clearToken, getToken } from '../api';
+import { clearToken, getToken, isAdmin } from '../api';
 
 export function Wordmark({ size = 22 }: { size?: number }) {
   return (
@@ -21,6 +21,7 @@ export function NavBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const isAuthed = !!getToken();
+  const admin = isAdmin();
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isHostRoute = location.pathname.startsWith('/host');
 
@@ -32,7 +33,7 @@ export function NavBar() {
       <div className="container gbg-nav-inner">
         <Link to="/" aria-label="GetBuddyGo home"><Wordmark /></Link>
         <nav className="row gap-4">
-          {!isAdminRoute && !isHostRoute && (
+          {!admin && !isAdminRoute && !isHostRoute && (
             <>
               <select
                 aria-label="Country"
@@ -62,7 +63,7 @@ export function NavBar() {
               <button className="navlink" onClick={logout}>Log out</button>
             </>
           )}
-          {isAdminRoute && (
+          {(admin || isAdminRoute) && !isHostRoute && (
             <>
               <Link className="navlink" to="/admin/dashboard">Overview</Link>
               <Link className="navlink" to="/admin/users">Users</Link>

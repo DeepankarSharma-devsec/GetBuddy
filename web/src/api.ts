@@ -36,5 +36,7 @@ export function apiError(e: unknown, fallback: string): string {
 }
 
 export const getToken = () => localStorage.getItem('token');
-export const clearToken = () => localStorage.removeItem('token');
+export const clearToken = () => { localStorage.removeItem('token'); localStorage.removeItem('is_admin'); };
 export const setToken = (t: string) => localStorage.setItem('token', t);
+export const setIsAdmin = (v: boolean) => localStorage.setItem('is_admin', v ? '1' : '0');
+export const isAdmin = () => localStorage.getItem('is_admin') === '1';

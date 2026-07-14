@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
-import { API_BASE, setToken, apiError } from '../api';
+import { API_BASE, setToken, setIsAdmin, apiError } from '../api';
 import { Wordmark, COUNTRIES, getCountry, setCountry } from '../components/ui';
 
 export default function Login() {
@@ -33,12 +33,14 @@ export default function Login() {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         });
         setToken(response.data.access_token);
+        setIsAdmin(!!response.data.is_admin);
         // Browse in the user's home country by default
         try {
           const me = await axios.get(`${API_BASE}/users/me`, { headers: { Authorization: `Bearer ${response.data.access_token}` } });
           if (me.data?.country) setCountry(me.data.country);
         } catch {}
-        navigate('/explore');
+        // Admins land in the admin portal, not the guest catalog
+        navigate(response.data.is_admin ? '/admin/dashboard' : '/explore');
       }
     } catch (error: any) {
       setErr(apiError(error, 'Action failed. Try again.'));
