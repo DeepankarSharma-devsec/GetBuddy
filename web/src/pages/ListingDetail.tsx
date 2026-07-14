@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, getToken } from '../api';
-import { NavBar, Photo, Avatar, Stars, Spinner, colorForId, CATEGORY_COLORS } from '../components/ui';
+import { NavBar, Photo, Avatar, Spinner, colorForId, CATEGORY_COLORS, durationLabel, totalPrice, sym } from '../components/ui';
 
 interface Event {
   id: number;
+  listing_kind: string;
   title: string;
   description: string;
   price: number;
+  currency?: string;
   event_type: string;
   mode: string;
   host_id: number;
-  start_time?: string;
+  start_time?: string | null;
   category?: string;
-  location_details?: string;
+  city?: string;
+  duration_minutes?: number;
+  max_participants?: number;
 }
 
 export default function ListingDetail() {
@@ -31,7 +35,8 @@ export default function ListingDetail() {
         if (getToken() && found) {
           try {
             const r = await api.get('/users/me/bookings');
-            const existing = r.data.find((b: any) => b.event_id === found.id);
+            // Ignore declined/cancelled so the guest can request again
+            const existing = r.data.find((b: any) => b.event_id === found.id && !['DECLINED', 'CANCELLED'].includes(b.status));
             if (existing) setExistingBookingId(existing.id);
           } catch {}
         }
@@ -52,12 +57,14 @@ export default function ListingDetail() {
             <Photo label={event.category || event.event_type} color={CATEGORY_COLORS[event.category || ''] || colorForId(event.id)} height={360} radius={0} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 32 }}>
+          <div className="split-2">
             <div>
               <div className="row gap-8" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
+                {event.listing_kind === 'SERVICE' && <span className="pill pill-cobalt">buddy service</span>}
                 {event.category && <span className="pill">{event.category}</span>}
-                <span className="pill pill-cobalt">{event.event_type}</span>
+                {event.listing_kind !== 'SERVICE' && <span className="pill pill-cobalt">{event.event_type}</span>}
                 <span className="pill pill-mint">{event.mode}</span>
+                {event.city && <span className="pill">{event.city}</span>}
               </div>
               <h1 className="display-2" style={{ marginBottom: 12 }}>{event.title}</h1>
               <div className="row gap-12" style={{ marginBottom: 28 }}>
@@ -65,7 +72,7 @@ export default function ListingDetail() {
                 <div>
                   <div style={{ fontWeight: 600 }}>Host #{event.host_id}</div>
                   <div className="row gap-6" style={{ fontSize: 12 }}>
-                    <Stars value={4.9} /> <span className="text-muted">4.9 · usually replies in ~30 min</span>
+                    <span className="pill pill-mint">phone verified</span>
                   </div>
                 </div>
               </div>
@@ -76,21 +83,49 @@ export default function ListingDetail() {
               </div>
 
               <div className="card-soft">
-                <div className="section-h">what's included</div>
+                <div className="section-h">{event.listing_kind === 'SERVICE' ? 'how it works' : "what's included"}</div>
                 <ul className="stack gap-8" style={{ listStyle: 'none', padding: 0, fontSize: 14 }}>
-                  <li>· Small group, intentional vibe</li>
-                  <li>· Hosted by a verified human (ID + phone)</li>
-                  <li>· Free cancellation up to 24h before</li>
-                  <li className="text-muted" style={{ fontStyle: 'italic' }}>
-                    {event.mode === 'Online' ? 'Join link shared after booking' : 'Full address shared after booking'}
-                  </li>
+                  {event.listing_kind === 'SERVICE' ? (
+                    <>
+                      <li>· Pick your date, time, and number of hours</li>
+                      <li>· Your buddy accepts (usually within a few hours)</li>
+                      <li>· Admin-reviewed, verified human</li>
+                      <li className="text-muted" style={{ fontStyle: 'italic' }}>
+                        {event.mode === 'Online' ? 'Join link shared once your request is accepted' : 'Meeting point shared once your request is accepted'}
+                      </li>
+                    </>
+                  ) : (
+                    <>
+                      <li>· Small group, intentional vibe</li>
+                      <li>· Hosted by a verified human (ID + phone)</li>
+                      <li>· Free cancellation up to 24h before</li>
+                      <li className="text-muted" style={{ fontStyle: 'italic' }}>
+                        {event.mode === 'Online' ? 'Join link shared after booking' : 'Full address shared after booking'}
+                      </li>
+                    </>
+                  )}
                 </ul>
               </div>
             </div>
 
             <aside className="card shadow" style={{ height: 'fit-content', position: 'sticky', top: 80 }}>
-              <div className="eyebrow">price per seat</div>
-              <div className="display-2" style={{ fontSize: 44, marginTop: 4 }}>₹{event.price.toFixed(0)}</div>
+              {event.listing_kind === 'SERVICE' ? (
+                <>
+                  <div className="eyebrow">hourly rate · you pick the hours</div>
+                  <div className="display-2" style={{ fontSize: 44, marginTop: 4 }}>{sym(event.currency)}{Math.round(event.price).toLocaleString()}<span style={{ fontSize: 18 }}>/hr</span></div>
+                  <div className="text-muted" style={{ fontSize: 13, marginTop: 6 }}>
+                    Choose your date, time & hours at the next step
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="eyebrow">total per seat · {durationLabel(event.duration_minutes)}</div>
+                  <div className="display-2" style={{ fontSize: 44, marginTop: 4 }}>{sym(event.currency)}{totalPrice(event.price, event.duration_minutes).toLocaleString()}</div>
+                  <div className="text-muted" style={{ fontSize: 13, marginTop: 6 }}>
+                    {sym(event.currency)}{Math.round(event.price).toLocaleString()}/hr × {durationLabel(event.duration_minutes)}
+                  </div>
+                </>
+              )}
               {event.start_time && (
                 <div className="mono text-muted" style={{ fontSize: 12, marginTop: 8 }}>
                   {new Date(event.start_time).toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -103,7 +138,7 @@ export default function ListingDetail() {
                 </button>
               ) : (
                 <button className="btn btn-primary btn-lg" style={{ width: '100%' }} onClick={() => navigate(`/book/${event.id}`)}>
-                  Book now →
+                  {event.listing_kind === 'SERVICE' ? 'Request to book →' : 'Book now →'}
                 </button>
               )}
               <p className="text-muted" style={{ fontSize: 11, marginTop: 12, textAlign: 'center' }}>

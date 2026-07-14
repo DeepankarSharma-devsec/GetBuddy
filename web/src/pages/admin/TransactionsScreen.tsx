@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getToken } from '../../api';
-import { NavBar, StatusPill, Spinner, Empty } from '../../components/ui';
+import { NavBar, StatusPill, Spinner, Empty, sym } from '../../components/ui';
 
 interface Transaction {
   id: number;
@@ -9,6 +9,7 @@ interface Transaction {
   gross_amount: number;
   platform_commission: number;
   host_payout: number;
+  currency?: string;
   payout_status: string;
   created_at: string;
 }
@@ -27,14 +28,16 @@ export default function TransactionsScreen() {
     })();
   }, [navigate]);
 
-  const totals = transactions.reduce(
-    (acc, t) => ({
-      gross: acc.gross + t.gross_amount,
-      commission: acc.commission + t.platform_commission,
-      payout: acc.payout + t.host_payout,
-    }),
-    { gross: 0, commission: 0, payout: 0 }
-  );
+  // Sums must stay per-currency — never add ₹ to $ to ¥
+  const byCurrency = (field: keyof Pick<Transaction, 'gross_amount' | 'platform_commission' | 'host_payout'>) => {
+    const acc: Record<string, number> = {};
+    for (const t of transactions) {
+      const c = t.currency || 'INR';
+      acc[c] = (acc[c] || 0) + t[field];
+    }
+    const parts = Object.entries(acc).map(([c, v]) => `${sym(c)}${Math.round(v).toLocaleString()}`);
+    return parts.length ? parts.join(' + ') : `${sym()}0`;
+  };
 
   return (
     <>
@@ -52,15 +55,15 @@ export default function TransactionsScreen() {
           <div className="grid grid-3" style={{ marginBottom: 24 }}>
             <div className="metric">
               <div className="label">gross volume</div>
-              <div className="value">₹{totals.gross.toFixed(0)}</div>
+              <div className="value" style={{ fontSize: 24 }}>{byCurrency('gross_amount')}</div>
             </div>
             <div className="metric" style={{ background: 'var(--ink)', color: 'var(--lime)', border: 'var(--border-card)' }}>
               <div className="label" style={{ color: 'rgba(214,242,107,0.7)' }}>platform commission</div>
-              <div className="value" style={{ color: 'var(--lime)' }}>₹{totals.commission.toFixed(0)}</div>
+              <div className="value" style={{ color: 'var(--lime)', fontSize: 24 }}>{byCurrency('platform_commission')}</div>
             </div>
             <div className="metric">
               <div className="label">host payouts</div>
-              <div className="value">₹{totals.payout.toFixed(0)}</div>
+              <div className="value" style={{ fontSize: 24 }}>{byCurrency('host_payout')}</div>
             </div>
           </div>
 
@@ -84,9 +87,9 @@ export default function TransactionsScreen() {
                     <tr key={t.id}>
                       <td><div style={{ fontWeight: 600 }}>#{t.id}</div></td>
                       <td className="text-muted">#{t.booking_id}</td>
-                      <td style={{ fontWeight: 600 }}>₹{t.gross_amount.toFixed(0)}</td>
-                      <td style={{ color: 'var(--cobalt)', fontWeight: 600 }}>₹{t.platform_commission.toFixed(0)}</td>
-                      <td>₹{t.host_payout.toFixed(0)}</td>
+                      <td style={{ fontWeight: 600 }}>{sym(t.currency)}{Math.round(t.gross_amount).toLocaleString()}</td>
+                      <td style={{ color: 'var(--cobalt)', fontWeight: 600 }}>{sym(t.currency)}{Math.round(t.platform_commission).toLocaleString()}</td>
+                      <td>{sym(t.currency)}{Math.round(t.host_payout).toLocaleString()}</td>
                       <td><StatusPill status={t.payout_status} /></td>
                     </tr>
                   ))}

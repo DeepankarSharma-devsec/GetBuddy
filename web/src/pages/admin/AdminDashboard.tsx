@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getToken } from '../../api';
-import { NavBar, Spinner } from '../../components/ui';
+import { NavBar, Spinner, sym } from '../../components/ui';
 
 interface Metrics {
   total_users: number;
@@ -9,6 +9,7 @@ interface Metrics {
   total_listings: number;
   total_bookings: number;
   total_revenue: number;
+  revenue_by_currency?: Record<string, number>;
 }
 
 export default function AdminDashboard() {
@@ -42,8 +43,12 @@ export default function AdminDashboard() {
           <div className="grid grid-3" style={{ marginBottom: 32 }}>
             <div className="metric" style={{ background: 'var(--ink)', color: 'var(--lime)', border: 'var(--border-card)' }}>
               <div className="label" style={{ color: 'rgba(214,242,107,0.7)' }}>platform revenue</div>
-              <div className="value" style={{ color: 'var(--lime)' }}>₹{metrics.total_revenue.toFixed(0)}</div>
-              <div className="delta" style={{ color: 'rgba(214,242,107,0.6)' }}>15% commission of gross</div>
+              <div className="value" style={{ color: 'var(--lime)', fontSize: 24 }}>
+                {Object.keys(metrics.revenue_by_currency || {}).length
+                  ? Object.entries(metrics.revenue_by_currency!).map(([c, v]) => `${sym(c)}${Math.round(v).toLocaleString()}`).join(' + ')
+                  : `${sym()}0`}
+              </div>
+              <div className="delta" style={{ color: 'rgba(214,242,107,0.6)' }}>15% commission of gross · per currency</div>
             </div>
             <div className="metric">
               <div className="label">total users</div>

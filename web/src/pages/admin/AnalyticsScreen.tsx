@@ -60,7 +60,8 @@ export default function AnalyticsScreen() {
                   <div key={month}>
                     <div className="row between" style={{ marginBottom: 6 }}>
                       <span style={{ fontWeight: 500 }}>{month}</span>
-                      <span className="mono" style={{ color: 'var(--cobalt)', fontWeight: 600 }}>₹{rev.toFixed(0)}</span>
+                      {/* ponytail: month sums mix currencies; per-currency trend charts when volume justifies it */}
+                      <span className="mono" style={{ color: 'var(--cobalt)', fontWeight: 600 }}>{rev.toFixed(0)} (all currencies)</span>
                     </div>
                     <div style={{ height: 10, background: 'var(--cream-2)', borderRadius: 999, overflow: 'hidden', border: '1px solid var(--ink)' }}>
                       <div style={{ width: `${(rev / maxRev) * 100}%`, height: '100%', background: 'var(--lime)' }} />
@@ -88,10 +89,10 @@ export default function AnalyticsScreen() {
             </div>
 
             <div className="card shadow" style={{ background: 'var(--ink)', color: 'var(--lime)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div className="eyebrow" style={{ color: 'rgba(214,242,107,0.7)' }}>highly active hosts</div>
+              <div className="eyebrow" style={{ color: 'rgba(214,242,107,0.7)' }}>verified hosts</div>
               <div className="display-1" style={{ fontSize: 88, color: 'var(--lime)', marginTop: 4 }}>{analytics.active_hosts}</div>
               <p style={{ color: 'rgba(214,242,107,0.7)', fontSize: 12, marginTop: 8 }}>
-                Hosts with bookings in the last 30 days.
+                Phone-verified hosts on the platform.
               </p>
             </div>
           </div>

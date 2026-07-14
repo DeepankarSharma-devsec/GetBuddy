@@ -3,26 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { api, getToken, apiError } from '../../api';
 import { NavBar } from '../../components/ui';
 
-export default function HostProfileSetup() {
+export default function HostApply() {
+  const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
-  const [city, setCity] = useState('');
   const [category, setCategory] = useState('');
+  const [city, setCity] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleFinish = async () => {
+  const handleSubmit = async () => {
     setErr(null); setLoading(true);
     try {
       if (!getToken()) { navigate('/login'); return; }
-      await api.put('/host/me/profile', {
+      await api.post('/host/apply', {
+        phone_number: phone,
         bio: bio || null,
-        city: city || null,
         category: category || null,
+        city: city || null,
       });
       navigate('/host/dashboard');
     } catch (e: any) {
-      setErr(apiError(e, 'Could not save your profile. Try again.'));
+      setErr(apiError(e, 'Could not submit your application. Try again.'));
     } finally { setLoading(false); }
   };
 
@@ -31,13 +33,21 @@ export default function HostProfileSetup() {
       <NavBar />
       <div className="page">
         <div className="container-narrow">
-          <div className="eyebrow">host onboarding · step 3 of 3</div>
+          <button className="btn btn-subtle btn-sm" style={{ marginBottom: 16 }} onClick={() => navigate('/host/onboarding')}>← Back</button>
+          <div className="eyebrow">host onboarding · step 2 of 2</div>
           <h1 className="display-2" style={{ marginTop: 6, marginBottom: 8 }}>
-            tell people who <span className="text-coral">you are.</span>
+            apply to <span className="text-coral">host.</span>
           </h1>
-          <p className="text-muted" style={{ marginBottom: 24 }}>This shows on your public host profile.</p>
+          <p className="text-muted" style={{ marginBottom: 24 }}>
+            Tell us who you are. Our team reviews every application, usually within a day, and we'll let you know as soon as you're approved.
+          </p>
 
           <div className="card shadow">
+            <div className="field">
+              <label>Phone number</label>
+              <input type="tel" placeholder="+91 98XXX XXXXX" value={phone} onChange={e => setPhone(e.target.value)} />
+              <p className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>Used only for account contact — never shown to guests.</p>
+            </div>
             <div className="field">
               <label>Bio · what should guests know?</label>
               <textarea
@@ -63,8 +73,8 @@ export default function HostProfileSetup() {
             </div>
 
             {err && <div className="pill pill-error" style={{ marginBottom: 12 }}>{err}</div>}
-            <button className="btn btn-primary btn-lg" style={{ width: '100%', marginTop: 12 }} onClick={handleFinish} disabled={loading}>
-              {loading ? 'Saving…' : 'Complete onboarding →'}
+            <button className="btn btn-primary btn-lg" style={{ width: '100%', marginTop: 12 }} onClick={handleSubmit} disabled={phone.length < 5 || loading}>
+              {loading ? 'Submitting…' : 'Submit application →'}
             </button>
           </div>
         </div>

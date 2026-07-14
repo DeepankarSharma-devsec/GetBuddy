@@ -1,3 +1,5 @@
+import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
@@ -9,9 +11,10 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 from .database import get_db
 
-SECRET_KEY = "dummy-secret-key-for-mvp-dont-use-in-prod"
+# ponytail: random fallback keeps dev safe; prod MUST set SECRET_KEY or every restart logs everyone out
+SECRET_KEY = os.getenv("SECRET_KEY") or secrets.token_hex(32)
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 

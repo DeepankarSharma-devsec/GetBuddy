@@ -48,13 +48,13 @@ GetBuddy/
 
 ## 5. Key Application Flows
 ### A. User Registration & Auth
-1. User registers via `/register`.
-2. First user in the database is automatically assigned **is_admin = True** for testing.
-3. Login via `/login` returns a JWT and user status (`is_admin`, `is_host`).
+1. User registers via `/register` (emails stored lowercase; password min 8 chars).
+2. The email matching the `ADMIN_EMAIL` env var is assigned **is_admin = True** on registration.
+3. Login via `/login` (case-insensitive email) returns a JWT and user status (`is_admin`, `is_host`).
 
 ### B. Becoming a Host
 1. User requests phone verification (`/host/request-verification`).
-2. OTP is mocked (code: `123456`).
+2. OTP is mocked (default `123456`, overridable via `OTP_CODE` env var).
 3. Verification (`/host/verify-phone`) promotes the user to **is_host = True** and creates a `HostProfile`.
 
 ### C. Hosting & Listing
@@ -63,8 +63,8 @@ GetBuddy/
 
 ### D. Booking & Payments
 1. Users book events via `POST /bookings`.
-2. System prevents duplicate bookings for the same user/event.
-3. **Transaction Logic**:
+2. System prevents duplicate bookings and enforces `max_participants` capacity.
+3. **Transaction Logic** (pricing is per hour: gross = hourly `price` × `duration_minutes`/60):
    - Platform takes a **15% commission**.
    - **85%** is added to the host's `total_earnings`.
    - Transactions are initially marked as `payout_status = PENDING`.

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getToken } from '../../api';
-import { NavBar, StatusPill, Spinner, Empty } from '../../components/ui';
+import { NavBar, StatusPill, Spinner, Empty, sym } from '../../components/ui';
 
 interface Listing {
   id: number;
   title: string;
   price: number;
+  currency?: string;
+  country?: string;
   event_type: string;
   mode: string;
   host_id: number;
@@ -66,7 +68,7 @@ export default function ListingsManagement() {
                       <td className="text-muted">Host #{l.host_id}</td>
                       <td><span className="pill pill-soft">{l.event_type}</span></td>
                       <td className="mono" style={{ fontSize: 11 }}>{l.mode.toUpperCase()}</td>
-                      <td style={{ fontWeight: 600 }}>₹{l.price.toFixed(0)}</td>
+                      <td style={{ fontWeight: 600 }}>{sym(l.currency)}{Math.round(l.price).toLocaleString()}/hr <span className="text-muted mono" style={{ fontSize: 10 }}>{l.country}</span></td>
                       <td><StatusPill status={l.status} /></td>
                       <td style={{ textAlign: 'right' }}>
                         <button className="btn btn-subtle btn-sm">Remove</button>

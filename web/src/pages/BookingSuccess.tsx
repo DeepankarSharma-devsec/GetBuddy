@@ -1,9 +1,12 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { NavBar } from '../components/ui';
 
 export default function BookingSuccess() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const params = new URLSearchParams(useLocation().search);
+  const requested = params.get('requested') === '1';
+  const paid = params.get('paid') === '1';
 
   return (
     <>
@@ -20,21 +23,34 @@ export default function BookingSuccess() {
               <path d="M5 12.5l4 4 10-10" stroke="#151515" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <div className="eyebrow">booking confirmed</div>
+          <div className="eyebrow">{requested ? 'request sent' : 'booking confirmed'}</div>
           <h1 className="display-1" style={{ fontSize: 56, marginTop: 8 }}>
-            you're <span className="text-coral">in.</span>
+            {requested ? <>request <span className="text-cobalt">sent.</span></> : <>you're <span className="text-coral">in.</span></>}
           </h1>
           <p className="text-muted" style={{ fontSize: 16, marginTop: 14, marginBottom: 32 }}>
-            Booking #{id} is locked in. Confirmation just landed in your inbox.
+            {requested
+              ? 'Your buddy has been notified and will accept or decline soon.'
+              : paid
+                ? 'Payment received — your seat is confirmed. It may take a few seconds to show as PAID in My Bookings.'
+                : `Booking #${id} is locked in. Your seat is confirmed.`}
           </p>
 
           <div className="card shadow" style={{ textAlign: 'left', marginBottom: 28 }}>
             <div className="section-h">what happens next</div>
             <ul className="stack gap-12" style={{ listStyle: 'none', padding: 0, fontSize: 14 }}>
-              <li className="row gap-12"><span className="pill pill-mint">1</span> Confirmation email is on its way.</li>
-              <li className="row gap-12"><span className="pill pill-mint">2</span> Online events: link unmasks 15 min before.</li>
-              <li className="row gap-12"><span className="pill pill-mint">3</span> Offline: full address now in My Bookings.</li>
-              <li className="row gap-12"><span className="pill pill-mint">4</span> Free cancel up to 24h before.</li>
+              {requested ? (
+                <>
+                  <li className="row gap-12"><span className="pill pill-mint">1</span> Your buddy accepts or declines — usually within a few hours.</li>
+                  <li className="row gap-12"><span className="pill pill-mint">2</span> Once accepted, payment is taken and the meeting details unlock.</li>
+                  <li className="row gap-12"><span className="pill pill-mint">3</span> Track the status anytime in My Bookings.</li>
+                </>
+              ) : (
+                <>
+                  <li className="row gap-12"><span className="pill pill-mint">1</span> Online events: join link is now in My Bookings.</li>
+                  <li className="row gap-12"><span className="pill pill-mint">2</span> Offline: full address is now in My Bookings.</li>
+                  <li className="row gap-12"><span className="pill pill-mint">3</span> Free cancel up to 24h before.</li>
+                </>
+              )}
             </ul>
           </div>
 

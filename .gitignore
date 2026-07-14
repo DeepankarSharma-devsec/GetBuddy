@@ -58,3 +58,6 @@ logs
 
 # Temp CLI
 .gh_cli/
+
+# Claude Code local worktrees/session data
+.claude/worktrees/

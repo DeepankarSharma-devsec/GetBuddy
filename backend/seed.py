@@ -1,12 +1,12 @@
 import sys
 import os
 import bcrypt
-from datetime import datetime, timezone
+from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.database import engine, Base, SessionLocal
-from app.models import User, HostProfile, Event, Booking
+from app.models import User, HostProfile, Event
 
 def seed():
     print("Rebuilding database...")
@@ -14,87 +14,109 @@ def seed():
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
-    
-    print("Generating dummy credentials...")
     pw = bcrypt.hashpw("password123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    
-    # 1. Create Admin
-    admin = User(email="admin@getbuddy.com", hashed_password=pw, full_name="Platform Admin", is_admin=True)
-    db.add(admin)
+
+    # 1. Admin
+    db.add(User(email="admin@getbuddy.com", hashed_password=pw, full_name="Platform Admin", is_admin=True, country="IN"))
     db.commit()
 
-    # 2. Create Realistic Hosts based on Stitch Mockups
-    u1 = User(email="amelia.w@getbuddy.local", hashed_password=pw, full_name="Amelia Wong", city="New York", is_host=True)
-    u2 = User(email="david.m@getbuddy.local", hashed_password=pw, full_name="David Miller", city="Los Angeles", is_host=True)
-    u3 = User(email="sarah.j@getbuddy.local", hashed_password=pw, full_name="Sarah Jenkins", city="Online Only", is_host=True)
-    
-    db.add(u1)
-    db.add(u2)
-    db.add(u3)
-    db.commit()
-
-    h1 = HostProfile(user_id=u1.id, phone_number="1234567890", phone_verified=True, bio="Professional mixologist taking curated drink experiences to your living room.", category="Lifestyle", city="New York")
-    h2 = HostProfile(user_id=u2.id, phone_number="0987654321", phone_verified=True, bio="Technical guitar instructor focusing on neo-soul paradigms.", category="Music", city="Los Angeles")
-    h3 = HostProfile(user_id=u3.id, phone_number="1112223333", phone_verified=True, bio="Life Coach specializing in executive mentorship and startup growth.", category="Business", city="Online Only")
-    
-    db.add(h1)
-    db.add(h2)
-    db.add(h3)
-    db.commit()
-
-    # 3. Create Events
-    events = [
-        Event(
-            host_id=h1.id,
-            title="Cocktail Masterclass: Tequila Variations",
-            description="Join me for a 2-hour offline group session where we deconstruct 3 classic cocktails and impart professional bartending tricks.",
-            price=150.0,
-            event_type="Group Session",
-            mode="Offline",
-            start_time=datetime.fromisoformat("2026-05-15T19:00:00+00:00"),
-            status="ACTIVE",
-            location_details="Williamsburg Studio, Brooklyn NY"
-        ),
-        Event(
-            host_id=h1.id,
-            title="1:1 Mixology Basics",
-            description="A personalized virtual hour discussing essential tools of the trade.",
-            price=60.0,
-            event_type="1:1 Session",
-            mode="Online",
-            start_time=datetime.fromisoformat("2026-05-18T14:00:00+00:00"),
-            status="ACTIVE",
-            location_details="https://zoom.us/j/827182"
-        ),
-        Event(
-            host_id=h2.id,
-            title="Neo-Soul Chord Progressions",
-            description="Advanced group class diving into R&B voicings. Bring your guitar.",
-            price=45.0,
-            event_type="Group Session",
-            mode="Online",
-            start_time=datetime.fromisoformat("2026-05-20T10:00:00+00:00"),
-            status="ACTIVE",
-            location_details="https://meet.google.com/abc-xyz"
-        ),
-        Event(
-            host_id=h3.id,
-            title="Startup Founder Therapy",
-            description="Strictly confidential 1:1 session discussing burnout, delegation, and scaling.",
-            price=300.0,
-            event_type="1:1 Session",
-            mode="Online",
-            start_time=datetime.fromisoformat("2026-06-01T09:00:00+00:00"),
-            status="ACTIVE",
-            location_details="https://zoom.us/j/private-link"
-        )
+    # 2. Approved hosts — one per country, prices in local currency
+    hosts_data = [
+        # (email, name, country, city, category, bio)
+        ("arjun.r@example.com",  "Arjun Rao",     "IN", "Bengaluru",   "food",      "Home cook hosting slow South Indian suppers in my Indiranagar garden."),
+        ("amelia.w@example.com", "Amelia Wong",   "US", "New York",    "lifestyle", "Professional mixologist taking curated drink experiences to your living room."),
+        ("david.m@example.com",  "David Miller",  "GB", "London",      "music",     "Guitar instructor and jam-night regular around Camden."),
+        ("sarah.j@example.com",  "Sarah Jenkins", "JP", "Tokyo",       "business",  "Startup coach for founders navigating the Tokyo ecosystem."),
+        ("minji.p@example.com",  "Min-ji Park",   "KR", "Seoul",       "hangout",   "Seoul native who knows every good noodle bar and noraebang in Hongdae."),
     ]
-    
+    profiles = {}
+    for email, name, country, city, category, bio in hosts_data:
+        u = User(email=email, hashed_password=pw, full_name=name, country=country, city=city, is_host=True)
+        db.add(u)
+        db.commit()
+        p = HostProfile(user_id=u.id, phone_number=f"9{u.id:09d}", phone_verified=True, status="APPROVED",
+                        bio=bio, category=category, city=city)
+        db.add(p)
+        db.commit()
+        profiles[country] = p
+
+    # A pending applicant awaiting admin review
+    u4 = User(email="priya.k@example.com", hashed_password=pw, full_name="Priya Kapoor", country="IN", city="Bengaluru")
+    db.add(u4)
+    db.commit()
+    db.add(HostProfile(user_id=u4.id, phone_number="9998887777", phone_verified=False, status="PENDING",
+                       bio="Home baker running weekend sourdough workshops.", category="food", city="Bengaluru"))
+    db.commit()
+
+    CUR = {"IN": "INR", "US": "USD", "GB": "GBP", "JP": "JPY", "KR": "KRW"}
+    def listing(country, **kw):
+        return Event(host_id=profiles[country].id, country=country, currency=CUR[country], status="ACTIVE", **kw)
+
+    # 3. Events — fixed date & duration, priced per hour in local currency
+    events = [
+        listing("IN", title="South Indian Supper, Plated Slow",
+                description="Four slow courses in my garden — appam, avial, ghee-roast, payasam. We chat, we eat, we don't rush.",
+                price=400.0, event_type="Group Session", mode="Offline", category="food",
+                duration_minutes=120, max_participants=8,
+                start_time=datetime.fromisoformat("2026-08-08T19:30:00"),
+                location_details="12, 5th Cross, Indiranagar, Bengaluru"),
+        listing("US", title="Cocktail Masterclass: Tequila Variations",
+                description="Deconstruct 3 classic cocktails and pick up professional bartending tricks in a small group.",
+                price=40.0, event_type="Group Session", mode="Offline", category="lifestyle",
+                duration_minutes=120, max_participants=8,
+                start_time=datetime.fromisoformat("2026-08-14T19:00:00"),
+                location_details="Williamsburg Studio, Brooklyn NY"),
+        listing("GB", title="Neo-Soul Guitar Circle",
+                description="Small-group session on R&B voicings and groove. Bring your guitar, leave with three new tunes.",
+                price=25.0, event_type="Group Session", mode="Offline", category="music",
+                duration_minutes=90, max_participants=10,
+                start_time=datetime.fromisoformat("2026-08-12T18:30:00"),
+                location_details="Camden Music Rooms, London NW1"),
+        listing("JP", title="Founder Office Hours (English/日本語)",
+                description="Confidential 1:1 on fundraising, hiring, and staying sane while scaling in Japan.",
+                price=8000.0, event_type="1:1 Session", mode="Online", category="business",
+                duration_minutes=60, max_participants=1,
+                start_time=datetime.fromisoformat("2026-08-05T09:00:00"),
+                location_details="https://zoom.us/j/founder-hours"),
+        listing("KR", title="Hongdae Night-Market Food Walk",
+                description="Street eats, arcade stops, and a noraebang finale. Come hungry.",
+                price=30000.0, event_type="Offline Event", mode="Offline", category="food",
+                duration_minutes=180, max_participants=6,
+                start_time=datetime.fromisoformat("2026-08-15T18:00:00"),
+                location_details="Hongik Univ. Station Exit 9, Seoul"),
+    ]
     for e in events:
         db.add(e)
     db.commit()
-    
-    print("Seeding Complete. 4 premium curations injected into the database.")
+
+    # 4. Buddy services — per hour, guest picks the slot
+    services = [
+        listing("IN", listing_kind="SERVICE", title="Movie Partner: first-day-first-show",
+                description="Kannada, Hindi, Hollywood — I'm in. Snacks strategy and post-credits debates included.",
+                price=250.0, event_type="1:1 Session", mode="Offline", category="movie", city="Bengaluru",
+                location_details="Usually PVR Forum or Garuda Mall — exact spot after booking."),
+        listing("US", listing_kind="SERVICE", title="Shopping Buddy: honest second opinions",
+                description="Wardrobe refresh, gift hunting, or sneaker drops — I'll carry bags and tell you the truth in the trial room.",
+                price=20.0, event_type="1:1 Session", mode="Offline", category="shopping", city="New York",
+                location_details="Meet at the SoHo block — exact corner after booking."),
+        listing("GB", listing_kind="SERVICE", title="Gig Buddy: live music companion",
+                description="From Camden dive bars to arena shows — never queue alone again.",
+                price=18.0, event_type="1:1 Session", mode="Offline", category="hangout", city="London",
+                location_details="Meet at the venue entrance — confirmed after booking."),
+        listing("JP", listing_kind="SERVICE", title="Hangout & Deep Talk: coffee-style video calls",
+                description="A judgment-free hour to vent, brainstorm your week, or practice English/Japanese. Camera optional.",
+                price=3000.0, event_type="1:1 Session", mode="Online", category="hangout", city="Online Only",
+                location_details="https://meet.google.com/buddy-call — active once accepted."),
+        listing("KR", listing_kind="SERVICE", title="Seoul Fitness Buddy: Han River runs",
+                description="Morning runs along the Han, stretching, and a smoothie after. All paces welcome.",
+                price=25000.0, event_type="1:1 Session", mode="Offline", category="fitness", city="Seoul",
+                location_details="Yeouido Hangang Park entrance — pin shared after booking."),
+    ]
+    for s in services:
+        db.add(s)
+    db.commit()
+
+    print(f"Seeding complete: {len(hosts_data)} hosts across 5 countries, {len(events)} events, {len(services)} services, 1 pending applicant.")
     db.close()
 
 if __name__ == "__main__":

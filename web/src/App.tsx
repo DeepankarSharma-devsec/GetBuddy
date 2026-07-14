@@ -1,5 +1,4 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Explore from './pages/Explore';
@@ -19,7 +18,7 @@ import MyBookingDetail from './pages/MyBookingDetail';
 import UserProfile from './pages/UserProfile';
 
 import HostIntro from './pages/host/HostIntro';
-import HostPhone from './pages/host/HostPhone';
+import HostApply from './pages/host/HostApply';
 import HostProfileSetup from './pages/host/HostProfileSetup';
 import HostDashboard from './pages/host/HostDashboard';
 import CreateListing from './pages/host/CreateListing';
@@ -44,7 +43,7 @@ function App() {
         
         {/* Host Routes */}
         <Route path="/host/onboarding" element={<HostIntro />} />
-        <Route path="/host/onboarding/phone" element={<HostPhone />} />
+        <Route path="/host/onboarding/apply" element={<HostApply />} />
         <Route path="/host/onboarding/profile" element={<HostProfileSetup />} />
         <Route path="/host/dashboard" element={<HostDashboard />} />
         <Route path="/host/create" element={<CreateListing />} />

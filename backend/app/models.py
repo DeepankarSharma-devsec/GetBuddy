@@ -31,6 +31,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_host = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
+    country = Column(String, default="IN")  # IN, US, GB, JP, KR
     city = Column(String, nullable=True)
     profile_photo = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -39,6 +40,11 @@ class User(Base):
     bookings = relationship("Booking", back_populates="user")
     reviews_given = relationship("Review", back_populates="user")
 
+    @property
+    def host_status(self):
+        # None until the user applies; PENDING/APPROVED/REJECTED afterwards
+        return self.host_profile.status if self.host_profile else None
+
 class HostProfile(Base):
     __tablename__ = "host_profiles"
 
@@ -46,6 +52,7 @@ class HostProfile(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     phone_number = Column(String, unique=True)
     phone_verified = Column(Boolean, default=False)
+    status = Column(String, default="PENDING")  # PENDING, APPROVED, REJECTED
     bio = Column(Text, nullable=True)
     expertise = Column(String, nullable=True)
     category = Column(String, nullable=True)
@@ -60,15 +67,22 @@ class Event(Base):
     __tablename__ = "events"
 
     id = Column(Integer, primary_key=True, index=True)
+    # EVENT: host fixes start_time/duration, guests take seats.
+    # SERVICE: an ongoing per-hour offering (buddy); the guest picks time & hours on booking.
+    listing_kind = Column(String, default="EVENT")  # EVENT, SERVICE
     title = Column(String, index=True)
     description = Column(Text)
     price = Column(Float)
     event_type = Column(String) # from EventType
     mode = Column(String) # from EventMode
     category = Column(String, nullable=True)
+    city = Column(String, nullable=True)  # discovery filter, mainly for services
+    # Set from the host's country at creation — prices are in the host's local currency
+    country = Column(String, default="IN")
+    currency = Column(String, default="INR")
     cover_image = Column(String, nullable=True)
     location_details = Column(String, nullable=True)
-    start_time = Column(DateTime)
+    start_time = Column(DateTime, nullable=True)  # null for services
     duration_minutes = Column(Integer, default=60)
     max_participants = Column(Integer, default=1)
     status = Column(String, default=ListingStatus.ACTIVE)
@@ -84,8 +98,11 @@ class Booking(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     event_id = Column(Integer, ForeignKey("events.id"))
-    status = Column(String, default="PENDING") # PENDING, CONFIRMED, CANCELLED, COMPLETED
+    status = Column(String, default="PENDING") # REQUESTED, CONFIRMED, DECLINED, CANCELLED, COMPLETED
     payment_status = Column(String, default="PENDING") # PENDING, PAID, REFUNDED
+    # Guest-chosen slot — only set for SERVICE bookings (events use the listing's schedule)
+    start_time = Column(DateTime, nullable=True)
+    duration_minutes = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     user = relationship("User", back_populates="bookings")
@@ -100,6 +117,7 @@ class Transaction(Base):
     gross_amount = Column(Float)
     platform_commission = Column(Float)
     host_payout = Column(Float)
+    currency = Column(String, default="INR")
     payout_status = Column(String, default="PENDING") # PENDING, PAID
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

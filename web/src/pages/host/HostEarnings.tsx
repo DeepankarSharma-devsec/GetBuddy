@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getToken } from '../../api';
-import { NavBar, Spinner, Empty } from '../../components/ui';
+import { NavBar, Spinner, Empty, sym } from '../../components/ui';
 
-interface Tx { id: number; event_title: string; host_payout: number; gross_amount: number; platform_commission: number; created_at: string; }
+interface Tx { id: number; event_title: string; host_payout: number; gross_amount: number; platform_commission: number; currency?: string; created_at: string; }
 
 export default function HostEarnings() {
   const [transactions, setTransactions] = useState<Tx[]>([]);
@@ -35,11 +35,13 @@ export default function HostEarnings() {
             <div className="row between" style={{ flexWrap: 'wrap', gap: 16 }}>
               <div>
                 <div className="eyebrow" style={{ color: 'rgba(214,242,107,0.7)' }}>lifetime payouts (after 15% fee)</div>
-                <div className="display-1" style={{ color: 'var(--lime)', fontSize: 56, marginTop: 4 }}>₹{total.toFixed(0)}</div>
+                <div className="display-1" style={{ color: 'var(--lime)', fontSize: 56, marginTop: 4 }}>{sym(transactions[0]?.currency)}{Math.round(total).toLocaleString()}</div>
               </div>
               <div className="stack gap-8" style={{ alignItems: 'flex-end' }}>
-                <span className="pill pill-ink" style={{ background: 'var(--lime)', color: 'var(--ink)' }}>UPI · WEEKLY</span>
-                <span className="mono" style={{ fontSize: 11, color: 'rgba(214,242,107,0.7)' }}>NEXT PAYOUT · MON 09:00 IST</span>
+                <span className="pill pill-ink" style={{ background: 'var(--lime)', color: 'var(--ink)' }}>
+                  {transactions.length} TRANSACTION{transactions.length === 1 ? '' : 'S'}
+                </span>
+                <span className="mono" style={{ fontSize: 11, color: 'rgba(214,242,107,0.7)' }}>YOU KEEP 85% OF EVERY BOOKING</span>
               </div>
             </div>
           </div>
@@ -56,9 +58,9 @@ export default function HostEarnings() {
                     <div className="text-muted mono" style={{ fontSize: 11 }}>{new Date(tx.created_at).toLocaleString()}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div className="display-2" style={{ fontSize: 22, color: 'var(--cobalt)' }}>+₹{tx.host_payout.toFixed(0)}</div>
+                    <div className="display-2" style={{ fontSize: 22, color: 'var(--cobalt)' }}>+{sym(tx.currency)}{Math.round(tx.host_payout).toLocaleString()}</div>
                     <div className="text-muted" style={{ fontSize: 11 }}>
-                      gross ₹{tx.gross_amount.toFixed(0)} − fee ₹{tx.platform_commission.toFixed(0)}
+                      gross {sym(tx.currency)}{Math.round(tx.gross_amount).toLocaleString()} − fee {sym(tx.currency)}{Math.round(tx.platform_commission).toLocaleString()}
                     </div>
                   </div>
                 </div>

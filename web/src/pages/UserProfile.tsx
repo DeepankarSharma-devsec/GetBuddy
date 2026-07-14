@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, clearToken, getToken } from '../api';
-import { NavBar, Avatar, Spinner } from '../components/ui';
+import { NavBar, Avatar, Spinner, countryName } from '../components/ui';
 
-interface User { id: number; email: string; full_name: string; is_host: boolean; is_admin?: boolean; city: string | null; }
+interface User { id: number; email: string; full_name: string; is_host: boolean; is_admin?: boolean; host_status?: string | null; country?: string; city: string | null; }
 
 export default function UserProfile() {
   const [user, setUser] = useState<User | null>(null);
@@ -37,21 +37,24 @@ export default function UserProfile() {
               <h2 className="h2" style={{ marginBottom: 4 }}>{user.full_name}</h2>
               <div className="text-muted" style={{ fontSize: 14 }}>{user.email}</div>
               <div className="text-muted mono" style={{ fontSize: 11, marginTop: 4 }}>
-                {user.city || 'CITY NOT SET'}{user.is_host ? ' · HOST' : ''}{user.is_admin ? ' · ADMIN' : ''}
+                {user.city || 'CITY NOT SET'}{user.country ? ` · ${countryName(user.country).toUpperCase()}` : ''}{user.is_host ? ' · HOST' : ''}{user.is_admin ? ' · ADMIN' : ''}
               </div>
             </div>
             {user.is_host ? (
               <button className="btn btn-primary" onClick={() => navigate('/host/dashboard')}>Host dashboard →</button>
+            ) : user.host_status === 'PENDING' ? (
+              <button className="btn btn-subtle" onClick={() => navigate('/host/dashboard')}>Application under review</button>
             ) : (
-              <button className="btn btn-accent" onClick={() => navigate('/host/onboarding')}>Become a host</button>
+              <button className="btn btn-accent" onClick={() => navigate('/host/onboarding')}>{user.host_status === 'REJECTED' ? 'Reapply to host' : 'Become a host'}</button>
             )}
           </div>
 
           <div className="grid grid-2" style={{ marginBottom: 20 }}>
             <ProfileTile label="My bookings" hint="Upcoming and past seats" onClick={() => navigate('/my-bookings')} />
             <ProfileTile label="Discover" hint="Find new experiences" onClick={() => navigate('/explore')} />
-            <ProfileTile label="Edit profile" hint="Name, photo, bio" onClick={() => {}} />
-            <ProfileTile label="Settings" hint="Notifications, privacy" onClick={() => {}} />
+            {user.is_host && (
+              <ProfileTile label="Edit host profile" hint="Bio, category, city" onClick={() => navigate('/host/onboarding/profile')} />
+            )}
             {user.is_admin && (
               <ProfileTile label="Admin overview" hint="Platform metrics & moderation" onClick={() => navigate('/admin/dashboard')} />
             )}

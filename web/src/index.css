@@ -90,7 +90,9 @@ button, input, select, textarea {
 .gbg-nav-inner {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 0;
+  flex-wrap: wrap; gap: 8px;
 }
+.gbg-nav nav { flex-wrap: wrap; row-gap: 4px; }
 .gbg-nav a.navlink {
   padding: 8px 14px; border-radius: var(--r-pill);
   font-weight: 600; font-size: 13px;
@@ -283,6 +285,47 @@ button, input, select, textarea {
   border-radius: var(--r-lg);
   padding: 48px 40px;
   position: relative; overflow: hidden;
+}
+
+/* faq accordion (native details/summary) */
+.faq {
+  background: var(--paper);
+  border: var(--border-card);
+  border-radius: var(--r-md);
+  padding: 0;
+  overflow: hidden;
+}
+.faq summary {
+  cursor: pointer;
+  padding: 18px 20px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+  list-style: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: '+';
+  font-size: 22px; line-height: 1;
+  color: var(--cobalt);
+  flex-shrink: 0;
+}
+.faq[open] { box-shadow: var(--shadow-card); }
+.faq[open] summary::after { content: '−'; color: var(--coral); }
+.faq p {
+  padding: 0 20px 18px;
+  font-size: 14px; line-height: 1.7;
+  color: var(--ink2);
+  max-width: 680px;
+}
+
+/* two-column split that stacks on small screens */
+.split-2 { display: grid; gap: 32px; grid-template-columns: 1.5fr 1fr; }
+.split-half { display: grid; grid-template-columns: 1fr 1fr; }
+@media (max-width: 900px) {
+  .split-2, .split-half { grid-template-columns: 1fr; }
+  .input-row { flex-direction: column; gap: 0; }
 }
 
 /* responsive grid */

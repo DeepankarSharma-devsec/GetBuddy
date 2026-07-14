@@ -11,7 +11,7 @@ const getBaseUrl = () => {
     }
     return 'http://localhost:8000';
   }
-  return 'https://api.getbuddy.com'; // Production fallback
+  return process.env.EXPO_PUBLIC_API_URL || 'https://api.getbuddy.com';
 };
 
 export const API_URL = getBaseUrl();
