@@ -137,3 +137,10 @@ class Review(Base):
     user = relationship("User", back_populates="reviews_given")
     host = relationship("HostProfile", back_populates="reviews_received")
     event = relationship("Event", back_populates="reviews")
+
+class Setting(Base):
+    # Simple key/value store for admin-tunable config (e.g. commission_rate).
+    __tablename__ = "settings"
+
+    key = Column(String, primary_key=True)
+    value = Column(String)

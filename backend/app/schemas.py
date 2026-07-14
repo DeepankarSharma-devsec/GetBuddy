@@ -133,6 +133,9 @@ class Transaction(BaseModel):
     class Config:
         from_attributes = True
 
+class SettingsUpdate(BaseModel):
+    commission_rate: float  # 0..0.9 (fraction, e.g. 0.15 = 15%)
+
 class AdminMetrics(BaseModel):
     total_users: int
     total_hosts: int

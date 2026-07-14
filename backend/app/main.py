@@ -34,6 +34,16 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 STRIPE_ALLOW_LIVE = os.getenv("STRIPE_ALLOW_LIVE") == "true"
 ZERO_DECIMAL_CURRENCIES = {"JPY", "KRW"}  # Stripe amounts for these are not in cents
 
+# Platform commission is admin-tunable (settings table); this is the fallback.
+DEFAULT_COMMISSION_RATE = 0.15
+
+def get_commission_rate(db: Session) -> float:
+    s = db.query(models.Setting).filter(models.Setting.key == "commission_rate").first()
+    try:
+        return float(s.value) if s else DEFAULT_COMMISSION_RATE
+    except (TypeError, ValueError):
+        return DEFAULT_COMMISSION_RATE
+
 def stripe_enabled() -> bool:
     return bool(STRIPE_SECRET_KEY)
 
@@ -325,7 +335,7 @@ def _settle_booking(db: Session, booking: models.Booking, event: models.Event):
     ponytail: payment_status=PAID without charging — Stripe checkout replaces this next."""
     minutes = booking.duration_minutes or event.duration_minutes or 60
     gross = round(event.price * minutes / 60)
-    commission = round(gross * 0.15, 2)
+    commission = round(gross * get_commission_rate(db), 2)
     payout = round(gross - commission, 2)
 
     booking.payment_status = "PAID"
@@ -551,6 +561,33 @@ def get_admin_bookings(skip: int = 0, limit: int = 100, db: Session = Depends(ge
 @app.get("/admin/transactions", response_model=List[schemas.Transaction])
 def get_admin_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_admin: models.User = Depends(auth.get_current_admin)):
     return db.query(models.Transaction).offset(skip).limit(limit).all()
+
+@app.post("/admin/transactions/{tx_id}/payout")
+def toggle_payout_sent(tx_id: int, db: Session = Depends(get_db), current_admin: models.User = Depends(auth.get_current_admin)):
+    """Mark a host payout as sent (or flip it back if marked by mistake)."""
+    tx = db.query(models.Transaction).filter(models.Transaction.id == tx_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    tx.payout_status = "PENDING" if tx.payout_status == "PAID" else "PAID"
+    db.commit()
+    return {"id": tx.id, "payout_status": tx.payout_status}
+
+@app.get("/admin/settings")
+def get_admin_settings(db: Session = Depends(get_db), current_admin: models.User = Depends(auth.get_current_admin)):
+    return {"commission_rate": get_commission_rate(db)}
+
+@app.put("/admin/settings")
+def update_admin_settings(update: schemas.SettingsUpdate, db: Session = Depends(get_db), current_admin: models.User = Depends(auth.get_current_admin)):
+    rate = update.commission_rate
+    if not (0 <= rate <= 0.9):
+        raise HTTPException(status_code=400, detail="Commission rate must be between 0 and 0.9 (0–90%).")
+    s = db.query(models.Setting).filter(models.Setting.key == "commission_rate").first()
+    if s:
+        s.value = str(rate)
+    else:
+        db.add(models.Setting(key="commission_rate", value=str(rate)))
+    db.commit()
+    return {"commission_rate": rate}
 
 @app.get("/admin/analytics")
 def get_admin_analytics(db: Session = Depends(get_db), current_admin: models.User = Depends(auth.get_current_admin)):
