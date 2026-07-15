@@ -35,7 +35,7 @@ export default function TransactionsScreen() {
         ]);
         setTransactions(tx.data);
         const pct = String(Math.round((settings.data.commission_rate ?? 0.15) * 100));
-        const fee = String(Math.round((settings.data.payment_fee_rate ?? 0.03) * 100));
+        const fee = String(Math.round((settings.data.payment_fee_rate ?? 0.04) * 100));
         setRatePct(pct); setSavedPct(pct);
         setFeePct(fee); setSavedFeePct(fee);
       } catch (e) { console.error(e); }

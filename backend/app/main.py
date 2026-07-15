@@ -36,9 +36,10 @@ ZERO_DECIMAL_CURRENCIES = {"JPY", "KRW"}  # Stripe amounts for these are not in 
 
 # Admin-tunable rates (settings table); these are the fallbacks.
 DEFAULT_COMMISSION_RATE = 0.15
-# Stripe's cut passed on to the guest at checkout. India: ~2% domestic / 3%
-# international + 18% GST — 3% covers the common case without under-charging.
-DEFAULT_PAYMENT_FEE_RATE = 0.03
+# Stripe's cut passed on to the guest at checkout. Default to the worst-case
+# (international card 3% + 18% GST ≈ 3.54%, rounded up) so the platform never
+# under-recovers; admin can lower it via /admin/settings.
+DEFAULT_PAYMENT_FEE_RATE = 0.04
 
 def _get_rate(db: Session, key: str, default: float) -> float:
     s = db.query(models.Setting).filter(models.Setting.key == key).first()
