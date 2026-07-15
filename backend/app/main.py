@@ -574,7 +574,8 @@ def confirm_account_deletion(user_id: int, db: Session = Depends(get_db), curren
         host.status = "REJECTED"
     # ponytail: anonymize-in-place keeps FK integrity for bookings/transactions;
     # hard-delete rows only if legal says retention isn't required.
-    user.email = f"deleted-{user.id}@deleted.invalid"
+    # ponytail: subdomain of our own domain — .invalid TLD fails Pydantic EmailStr on response
+    user.email = f"deleted-{user.id}@deleted.getbuddygo.com"
     user.full_name = "Deleted user"
     # Random unusable password (empty string would crash bcrypt.checkpw on login)
     user.hashed_password = auth.get_password_hash(auth.secrets.token_hex(32))
