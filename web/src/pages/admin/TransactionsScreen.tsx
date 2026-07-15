@@ -17,8 +17,10 @@ interface Transaction {
 export default function TransactionsScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [ratePct, setRatePct] = useState('');       // commission as a percentage, e.g. "15"
-  const [savedPct, setSavedPct] = useState('');     // last saved value, to detect changes
+  const [ratePct, setRatePct] = useState('');       // commission %, e.g. "15"
+  const [feePct, setFeePct] = useState('');         // payment fee %, e.g. "3"
+  const [savedPct, setSavedPct] = useState('');
+  const [savedFeePct, setSavedFeePct] = useState('');
   const [savingRate, setSavingRate] = useState(false);
   const [rateMsg, setRateMsg] = useState('');
   const navigate = useNavigate();
@@ -33,19 +35,22 @@ export default function TransactionsScreen() {
         ]);
         setTransactions(tx.data);
         const pct = String(Math.round((settings.data.commission_rate ?? 0.15) * 100));
+        const fee = String(Math.round((settings.data.payment_fee_rate ?? 0.03) * 100));
         setRatePct(pct); setSavedPct(pct);
+        setFeePct(fee); setSavedFeePct(fee);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();
   }, [navigate]);
 
-  const saveRate = async () => {
-    const pct = Number(ratePct);
-    if (Number.isNaN(pct) || pct < 0 || pct > 90) { setRateMsg('Enter 0–90'); return; }
+  const saveRates = async () => {
+    const c = Number(ratePct), f = Number(feePct);
+    if (Number.isNaN(c) || c < 0 || c > 90) { setRateMsg('Commission 0–90'); return; }
+    if (Number.isNaN(f) || f < 0 || f > 50) { setRateMsg('Fee 0–50'); return; }
     setSavingRate(true); setRateMsg('');
     try {
-      await api.put('/admin/settings', { commission_rate: pct / 100 });
-      setSavedPct(String(pct)); setRateMsg('Saved ✓');
+      await api.put('/admin/settings', { commission_rate: c / 100, payment_fee_rate: f / 100 });
+      setSavedPct(String(c)); setSavedFeePct(String(f)); setRateMsg('Saved ✓');
     } catch (e) { console.error(e); setRateMsg('Failed'); }
     finally { setSavingRate(false); }
   };
@@ -73,7 +78,7 @@ export default function TransactionsScreen() {
   };
 
   const isPaid = (t: Transaction) => t.payout_status === 'PAID';
-  const rateDirty = ratePct !== savedPct;
+  const rateDirty = ratePct !== savedPct || feePct !== savedFeePct;
 
   return (
     <>
@@ -88,27 +93,40 @@ export default function TransactionsScreen() {
             <button className="btn btn-subtle" onClick={() => navigate('/admin/dashboard')}>← Dashboard</button>
           </div>
 
-          {/* Commission control — applies to future settlements, not past transactions */}
+          {/* Rate controls — apply to future bookings, not past transactions */}
           <div className="card shadow" style={{ marginBottom: 24 }}>
-            <div className="row between" style={{ flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 28, alignItems: 'flex-end' }}>
               <div>
                 <div className="label" style={{ marginBottom: 6 }}>platform commission</div>
                 <div className="row" style={{ gap: 8, alignItems: 'center' }}>
                   <input
                     type="number" min={0} max={90} value={ratePct}
                     onChange={e => setRatePct(e.target.value)}
-                    style={{ width: 90, padding: '8px 10px', border: '1px solid var(--line2)', borderRadius: 10, fontWeight: 700, fontSize: 16 }}
+                    style={{ width: 84, padding: '8px 10px', border: '1px solid var(--line2)', borderRadius: 10, fontWeight: 700, fontSize: 16 }}
                   />
                   <span style={{ fontWeight: 700, fontSize: 16 }}>%</span>
-                  <button className="btn btn-primary btn-sm" onClick={saveRate} disabled={savingRate || !rateDirty}>
-                    {savingRate ? 'Saving…' : 'Save'}
-                  </button>
-                  {rateMsg && <span className="text-muted" style={{ fontSize: 13 }}>{rateMsg}</span>}
                 </div>
               </div>
-              <div className="text-muted" style={{ fontSize: 12, maxWidth: 320 }}>
-                Taken from each booking’s gross. Changing it affects new bookings only — past transactions keep their recorded split.
+              <div>
+                <div className="label" style={{ marginBottom: 6 }}>payment fee (guest pays)</div>
+                <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="number" min={0} max={50} value={feePct}
+                    onChange={e => setFeePct(e.target.value)}
+                    style={{ width: 84, padding: '8px 10px', border: '1px solid var(--line2)', borderRadius: 10, fontWeight: 700, fontSize: 16 }}
+                  />
+                  <span style={{ fontWeight: 700, fontSize: 16 }}>%</span>
+                </div>
               </div>
+              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <button className="btn btn-primary btn-sm" onClick={saveRates} disabled={savingRate || !rateDirty}>
+                  {savingRate ? 'Saving…' : 'Save'}
+                </button>
+                {rateMsg && <span className="text-muted" style={{ fontSize: 13 }}>{rateMsg}</span>}
+              </div>
+            </div>
+            <div className="text-muted" style={{ fontSize: 12, marginTop: 12, maxWidth: 560 }}>
+              Commission is your cut of each booking. Payment fee is added on top at checkout so the guest covers Stripe’s charge — it doesn’t affect host payouts. Both apply to new bookings only.
             </div>
           </div>
 

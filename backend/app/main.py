@@ -34,15 +34,24 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 STRIPE_ALLOW_LIVE = os.getenv("STRIPE_ALLOW_LIVE") == "true"
 ZERO_DECIMAL_CURRENCIES = {"JPY", "KRW"}  # Stripe amounts for these are not in cents
 
-# Platform commission is admin-tunable (settings table); this is the fallback.
+# Admin-tunable rates (settings table); these are the fallbacks.
 DEFAULT_COMMISSION_RATE = 0.15
+# Stripe's cut passed on to the guest at checkout. India: ~2% domestic / 3%
+# international + 18% GST — 3% covers the common case without under-charging.
+DEFAULT_PAYMENT_FEE_RATE = 0.03
+
+def _get_rate(db: Session, key: str, default: float) -> float:
+    s = db.query(models.Setting).filter(models.Setting.key == key).first()
+    try:
+        return float(s.value) if s else default
+    except (TypeError, ValueError):
+        return default
 
 def get_commission_rate(db: Session) -> float:
-    s = db.query(models.Setting).filter(models.Setting.key == "commission_rate").first()
-    try:
-        return float(s.value) if s else DEFAULT_COMMISSION_RATE
-    except (TypeError, ValueError):
-        return DEFAULT_COMMISSION_RATE
+    return _get_rate(db, "commission_rate", DEFAULT_COMMISSION_RATE)
+
+def get_payment_fee_rate(db: Session) -> float:
+    return _get_rate(db, "payment_fee_rate", DEFAULT_PAYMENT_FEE_RATE)
 
 def stripe_enabled() -> bool:
     return bool(STRIPE_SECRET_KEY)
@@ -57,26 +66,42 @@ def _assert_stripe_usable():
                    "Use a test key (sk_test_...) for development, or set STRIPE_ALLOW_LIVE=true after deploying.",
         )
 
-def _checkout_url_for(booking: "models.Booking", event: "models.Event") -> str:
+def _checkout_url_for(booking: "models.Booking", event: "models.Event", db: Session) -> str:
     """Create a Stripe Checkout session for a booking. Amount is always computed
-    server-side from the listing's rate x duration, in the listing's currency."""
+    server-side from the listing's rate x duration, in the listing's currency.
+    The guest also pays a processing fee that covers Stripe's cut, so the
+    platform nets the full listing price (host payout/commission are unaffected)."""
     _assert_stripe_usable()
     stripe.api_key = STRIPE_SECRET_KEY
     minutes = booking.duration_minutes or event.duration_minutes or 60
     gross = round(event.price * minutes / 60)
     currency = (event.currency or "INR").upper()
-    unit_amount = int(gross if currency in ZERO_DECIMAL_CURRENCIES else gross * 100)
+    zero_dec = currency in ZERO_DECIMAL_CURRENCIES
+    to_minor = lambda amt: int(amt if zero_dec else amt * 100)
+
+    line_items = [{
+        "price_data": {
+            "currency": currency.lower(),
+            "product_data": {"name": event.title},
+            "unit_amount": to_minor(gross),
+        },
+        "quantity": 1,
+    }]
+    # Pass Stripe's fee to the guest as a separate, transparent line item
+    fee = round(gross * get_payment_fee_rate(db))
+    if fee > 0:
+        line_items.append({
+            "price_data": {
+                "currency": currency.lower(),
+                "product_data": {"name": "Payment processing fee"},
+                "unit_amount": to_minor(fee),
+            },
+            "quantity": 1,
+        })
     try:
         session = stripe.checkout.Session.create(
             mode="payment",
-            line_items=[{
-                "price_data": {
-                    "currency": currency.lower(),
-                    "product_data": {"name": event.title},
-                    "unit_amount": unit_amount,
-                },
-                "quantity": 1,
-            }],
+            line_items=line_items,
             metadata={"booking_id": str(booking.id), "app": "getbuddygo"},
             success_url=f"{FRONTEND_URL}/booking-success/{event.id}?paid=1",
             cancel_url=f"{FRONTEND_URL}/my-bookings/{booking.id}",
@@ -401,7 +426,7 @@ def book_event(booking: schemas.BookingCreate, db: Session = Depends(get_db), cu
             db.add(db_booking)
             db.commit()
             db.refresh(db_booking)
-        db_booking.checkout_url = _checkout_url_for(db_booking, event)  # transient, not stored
+        db_booking.checkout_url = _checkout_url_for(db_booking, event, db)  # transient, not stored
         return db_booking
 
     # ponytail: mock payment path for local dev without Stripe keys
@@ -426,7 +451,7 @@ def pay_for_booking(booking_id: int, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=400, detail="This booking is already paid.")
     if booking.status not in ("PENDING_PAYMENT", "CONFIRMED"):
         raise HTTPException(status_code=400, detail="This booking isn't ready for payment yet.")
-    return {"checkout_url": _checkout_url_for(booking, booking.event)}
+    return {"checkout_url": _checkout_url_for(booking, booking.event, db)}
 
 @app.post("/webhooks/stripe")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
@@ -572,22 +597,29 @@ def toggle_payout_sent(tx_id: int, db: Session = Depends(get_db), current_admin:
     db.commit()
     return {"id": tx.id, "payout_status": tx.payout_status}
 
+def _set_rate(db: Session, key: str, value: float):
+    s = db.query(models.Setting).filter(models.Setting.key == key).first()
+    if s:
+        s.value = str(value)
+    else:
+        db.add(models.Setting(key=key, value=str(value)))
+
 @app.get("/admin/settings")
 def get_admin_settings(db: Session = Depends(get_db), current_admin: models.User = Depends(auth.get_current_admin)):
-    return {"commission_rate": get_commission_rate(db)}
+    return {"commission_rate": get_commission_rate(db), "payment_fee_rate": get_payment_fee_rate(db)}
 
 @app.put("/admin/settings")
 def update_admin_settings(update: schemas.SettingsUpdate, db: Session = Depends(get_db), current_admin: models.User = Depends(auth.get_current_admin)):
-    rate = update.commission_rate
-    if not (0 <= rate <= 0.9):
-        raise HTTPException(status_code=400, detail="Commission rate must be between 0 and 0.9 (0–90%).")
-    s = db.query(models.Setting).filter(models.Setting.key == "commission_rate").first()
-    if s:
-        s.value = str(rate)
-    else:
-        db.add(models.Setting(key="commission_rate", value=str(rate)))
+    if update.commission_rate is not None:
+        if not (0 <= update.commission_rate <= 0.9):
+            raise HTTPException(status_code=400, detail="Commission rate must be between 0 and 0.9 (0–90%).")
+        _set_rate(db, "commission_rate", update.commission_rate)
+    if update.payment_fee_rate is not None:
+        if not (0 <= update.payment_fee_rate <= 0.5):
+            raise HTTPException(status_code=400, detail="Payment fee rate must be between 0 and 0.5 (0–50%).")
+        _set_rate(db, "payment_fee_rate", update.payment_fee_rate)
     db.commit()
-    return {"commission_rate": rate}
+    return {"commission_rate": get_commission_rate(db), "payment_fee_rate": get_payment_fee_rate(db)}
 
 @app.get("/admin/analytics")
 def get_admin_analytics(db: Session = Depends(get_db), current_admin: models.User = Depends(auth.get_current_admin)):
