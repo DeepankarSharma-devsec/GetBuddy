@@ -8,6 +8,7 @@ interface User {
   email: string;
   full_name: string;
   is_active: boolean;
+  deletion_requested?: boolean;
   is_host: boolean;
   is_admin: boolean;
   created_at: string;
@@ -26,6 +27,13 @@ export default function UserManagement() {
       finally { setLoading(false); }
     })();
   }, [navigate]);
+
+  // DPDPA erasure: admin manually confirms the user's deletion request
+  const confirmDeletion = async (id: number) => {
+    if (!window.confirm('Erase this user\'s personal data? This cannot be undone.')) return;
+    await api.post(`/admin/users/${id}/confirm-deletion`);
+    setUsers((await api.get('/admin/users')).data);
+  };
 
   return (
     <>
@@ -72,9 +80,18 @@ export default function UserManagement() {
                           {u.is_admin ? 'ADMIN' : u.is_host ? 'HOST' : 'USER'}
                         </span>
                       </td>
-                      <td><StatusPill status={u.is_active ? 'ACTIVE' : 'BLOCKED'} /></td>
+                      <td>
+                        {u.deletion_requested
+                          ? <StatusPill status="DELETION REQUESTED" />
+                          : <StatusPill status={u.is_active ? 'ACTIVE' : 'BLOCKED'} />}
+                      </td>
                       <td style={{ textAlign: 'right' }}>
-                        <button className="btn btn-subtle btn-sm">{u.is_active ? 'Block' : 'Unblock'}</button>
+                        {u.deletion_requested ? (
+                          <button className="btn btn-subtle btn-sm" style={{ color: 'var(--coral)', borderColor: 'var(--coral-soft)' }}
+                            onClick={() => confirmDeletion(u.id)}>Confirm deletion</button>
+                        ) : (
+                          <button className="btn btn-subtle btn-sm">{u.is_active ? 'Block' : 'Unblock'}</button>
+                        )}
                       </td>
                     </tr>
                   ))}

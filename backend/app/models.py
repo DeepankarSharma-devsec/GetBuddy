@@ -29,6 +29,7 @@ class User(Base):
     hashed_password = Column(String)
     full_name = Column(String)
     is_active = Column(Boolean, default=True)
+    deletion_requested = Column(Boolean, default=False)  # DPDPA erasure, pending admin confirmation
     is_host = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
     country = Column(String, default="IN")  # IN, US, GB, JP, KR

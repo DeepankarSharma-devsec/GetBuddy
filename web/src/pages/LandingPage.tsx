@@ -252,7 +252,7 @@ export default function LandingPage() {
             </div>
             <div className="row between text-muted mono" style={{ fontSize: 11, padding: '20px 0', borderTop: '1px solid var(--line)', flexWrap: 'wrap', gap: 8 }}>
               <span>© 2026 GetBuddyGo · made in bengaluru</span>
-              <span>privacy · terms · 18+ only</span>
+              <span><Link to="/privacy">privacy</Link> · <Link to="/terms">terms</Link> · 18+ only</span>
             </div>
           </footer>
 

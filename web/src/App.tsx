@@ -16,6 +16,8 @@ import BookingSuccess from './pages/BookingSuccess';
 import MyBookings from './pages/MyBookings';
 import MyBookingDetail from './pages/MyBookingDetail';
 import UserProfile from './pages/UserProfile';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import Terms from './pages/Terms';
 
 import HostIntro from './pages/host/HostIntro';
 import HostApply from './pages/host/HostApply';
@@ -25,10 +27,12 @@ import CreateListing from './pages/host/CreateListing';
 import HostBookings from './pages/host/HostBookings';
 import HostCalendar from './pages/host/HostCalendar';
 import HostEarnings from './pages/host/HostEarnings';
+import ConsentBanner from './components/ConsentBanner';
 
 function App() {
   return (
     <Router>
+      <ConsentBanner />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
@@ -40,6 +44,8 @@ function App() {
         <Route path="/my-bookings" element={<MyBookings />} />
         <Route path="/my-bookings/:id" element={<MyBookingDetail />} />
         <Route path="/profile" element={<UserProfile />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<Terms />} />
         
         {/* Host Routes */}
         <Route path="/host/onboarding" element={<HostIntro />} />

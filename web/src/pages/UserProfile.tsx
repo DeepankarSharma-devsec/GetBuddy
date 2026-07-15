@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, clearToken, getToken } from '../api';
 import { NavBar, Avatar, Spinner, countryName } from '../components/ui';
 
-interface User { id: number; email: string; full_name: string; is_host: boolean; is_admin?: boolean; host_status?: string | null; country?: string; city: string | null; }
+interface User { id: number; email: string; full_name: string; is_host: boolean; is_admin?: boolean; host_status?: string | null; country?: string; city: string | null; deletion_requested?: boolean; }
 
 export default function UserProfile() {
   const [user, setUser] = useState<User | null>(null);
@@ -20,6 +20,26 @@ export default function UserProfile() {
   }, [navigate]);
 
   const handleLogout = () => { clearToken(); navigate('/login'); };
+
+  // DPDPA right of access: download everything we hold as JSON
+  const handleExport = async () => {
+    const r = await api.get('/users/me/export');
+    const url = URL.createObjectURL(new Blob([JSON.stringify(r.data, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'getbuddygo-my-data.json'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // DPDPA right of erasure — request goes to admin review, erasure is manual
+  const handleDelete = async () => {
+    if (!window.confirm('Request account deletion? Our team will review and erase your personal data. You can cancel the request until then.')) return;
+    await api.delete('/users/me');
+    setUser({ ...user!, deletion_requested: true });
+  };
+  const handleCancelDelete = async () => {
+    await api.delete('/users/me/deletion-request');
+    setUser({ ...user!, deletion_requested: false });
+  };
 
   if (!user) return (<><NavBar /><div className="page container"><Spinner /></div></>);
 
@@ -64,7 +84,15 @@ export default function UserProfile() {
             )}
           </div>
 
-          <button className="btn btn-subtle" style={{ color: 'var(--coral)', borderColor: 'var(--coral-soft)' }} onClick={handleLogout}>Log out</button>
+          <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+            <button className="btn btn-subtle" style={{ color: 'var(--coral)', borderColor: 'var(--coral-soft)' }} onClick={handleLogout}>Log out</button>
+            <button className="btn btn-subtle" onClick={handleExport}>Download my data</button>
+            {!user.is_admin && (user.deletion_requested ? (
+              <button className="btn btn-subtle" onClick={handleCancelDelete}>Deletion pending review — cancel request</button>
+            ) : (
+              <button className="btn btn-subtle" style={{ color: 'var(--coral)', borderColor: 'var(--coral-soft)' }} onClick={handleDelete}>Delete account</button>
+            ))}
+          </div>
         </div>
       </div>
     </>

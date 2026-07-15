@@ -15,6 +15,7 @@ class UserCreate(UserBase):
 class User(UserBase):
     id: int
     is_active: bool
+    deletion_requested: bool = False
     is_host: bool
     is_admin: bool
     host_status: Optional[str] = None  # None / PENDING / APPROVED / REJECTED

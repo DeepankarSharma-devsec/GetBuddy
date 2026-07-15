@@ -515,7 +515,77 @@ def get_my_booking_detail(booking_id: int, db: Session = Depends(get_db), curren
         },
     }
 
+# ---- DPDPA: data export + account deletion ----
+@app.get("/users/me/export")
+def export_my_data(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """DPDPA right of access: everything we hold about the user, as JSON."""
+    host = db.query(models.HostProfile).filter(models.HostProfile.user_id == current_user.id).first()
+    bookings = db.query(models.Booking).filter(models.Booking.user_id == current_user.id).all()
+    return {
+        "account": {
+            "id": current_user.id, "email": current_user.email, "full_name": current_user.full_name,
+            "country": current_user.country, "city": current_user.city,
+            "profile_photo": current_user.profile_photo, "is_host": current_user.is_host,
+            "created_at": current_user.created_at,
+        },
+        "host_profile": {
+            "phone_number": host.phone_number, "status": host.status, "bio": host.bio,
+            "expertise": host.expertise, "category": host.category, "city": host.city,
+            "total_earnings": host.total_earnings,
+        } if host else None,
+        "bookings": [{
+            "id": b.id, "event_id": b.event_id, "status": b.status,
+            "payment_status": b.payment_status, "start_time": b.start_time,
+            "duration_minutes": b.duration_minutes, "created_at": b.created_at,
+        } for b in bookings],
+    }
+
+@app.delete("/users/me")
+def request_account_deletion(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """DPDPA right of erasure: flags the account; an admin reviews and confirms the actual erasure."""
+    if current_user.is_admin:
+        raise HTTPException(status_code=400, detail="Admin accounts cannot self-delete")
+    current_user.deletion_requested = True
+    db.commit()
+    return {"detail": "Deletion requested. Our team will erase your data after review."}
+
+@app.delete("/users/me/deletion-request")
+def cancel_account_deletion(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    current_user.deletion_requested = False
+    db.commit()
+    return {"detail": "Deletion request cancelled"}
+
 # ---- ADMIN PANEL ROUTES ----
+@app.post("/admin/users/{user_id}/confirm-deletion")
+def confirm_account_deletion(user_id: int, db: Session = Depends(get_db), current_admin: models.User = Depends(auth.get_current_admin)):
+    """Admin-confirmed DPDPA erasure: anonymize PII, keep transaction records for legal retention."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.deletion_requested:
+        raise HTTPException(status_code=400, detail="User has not requested deletion")
+    host = db.query(models.HostProfile).filter(models.HostProfile.user_id == user.id).first()
+    if host:
+        # Retire listings so they disappear from discovery
+        db.query(models.Event).filter(models.Event.host_id == host.id).update({"status": "INACTIVE"})
+        host.phone_number = f"deleted-{host.id}"
+        host.bio = None
+        host.expertise = None
+        host.status = "REJECTED"
+    # ponytail: anonymize-in-place keeps FK integrity for bookings/transactions;
+    # hard-delete rows only if legal says retention isn't required.
+    user.email = f"deleted-{user.id}@deleted.invalid"
+    user.full_name = "Deleted user"
+    # Random unusable password (empty string would crash bcrypt.checkpw on login)
+    user.hashed_password = auth.get_password_hash(auth.secrets.token_hex(32))
+    user.city = None
+    user.profile_photo = None
+    user.is_active = False
+    user.is_host = False
+    user.deletion_requested = False
+    db.commit()
+    return {"detail": "Account erased"}
+
 @app.get("/admin/metrics", response_model=schemas.AdminMetrics)
 def get_admin_metrics(db: Session = Depends(get_db), current_admin: models.User = Depends(auth.get_current_admin)):
     total_users = db.query(models.User).count()
