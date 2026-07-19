@@ -1,0 +1,4 @@
+*.db
+test_*.py
+__pycache__
+.env
