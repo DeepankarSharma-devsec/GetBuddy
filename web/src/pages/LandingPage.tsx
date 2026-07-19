@@ -42,13 +42,13 @@ export default function LandingPage() {
           <section className="hero" style={{ marginBottom: 72 }}>
             <div className="split-2" style={{ alignItems: 'center' }}>
               <div>
-                <div className="row gap-8" style={{ marginBottom: 16 }}>
-                  <span className="pill pill-ink"><span className="dot live" /> live in {countryName(getCountry()).toLowerCase()} + 4 more</span>
-                  <span className="pill">18+ · all ages welcome</span>
+                <div className="row gap-8" style={{ marginBottom: 16, flexWrap: 'wrap' }}>
+                  <span className="pill pill-ink"><span className="dot live" /> live in {countryName(getCountry()).toLowerCase()} + 60 more</span>
+                  <span className="ticket-badge">est. 2026 · admit one</span>
                 </div>
-                <h1 className="display-1">
-                  social is a <span className="text-cobalt">skill.</span><br/>
-                  someone is <span className="text-coral">selling</span> it.
+                <h1 className="display-1 vintage-head">
+                  social is a <em className="text-cobalt">skill.</em><br/>
+                  someone is <em className="text-coral">selling</em> it.
                 </h1>
                 <p style={{ marginTop: 18, fontSize: 17, maxWidth: 520, lineHeight: 1.55 }}>
                   GetBuddyGo is a marketplace for hosted experiences — slow dinners, sunset treks, jam nights, gaming couches, storytelling walks. Pay by the hour, only for what you book. No memberships, no subscriptions.
@@ -57,10 +57,11 @@ export default function LandingPage() {
                   <button className="btn btn-primary btn-lg" onClick={() => navigate('/explore')}>Discover →</button>
                   <button className="btn btn-ghost btn-lg" onClick={() => navigate('/host/onboarding')}>Become a host</button>
                 </div>
-                <div className="row gap-24" style={{ marginTop: 40 }}>
+                <div className="row gap-24" style={{ marginTop: 40, alignItems: 'center' }}>
                   <Stat n={`${localSymbol}0`} label="membership fee" />
                   <Stat n="per hour" label="honest pricing" />
                   <Stat n="100%" label="hosts phone-verified" />
+                  <span className="stamp">getbuddy<br/>go · est.<br/>2026</span>
                 </div>
               </div>
               <div className="stack gap-12">
@@ -178,7 +179,10 @@ export default function LandingPage() {
           {/* HOW IT WORKS */}
           <section style={{ marginBottom: 72 }}>
             <div className="eyebrow">how it works</div>
-            <h2 className="display-2" style={{ marginTop: 6, marginBottom: 28 }}>three steps. zero awkward.</h2>
+            <div className="row between" style={{ flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
+              <h2 className="display-2 vintage-head" style={{ marginTop: 6 }}>three steps. <em>zero awkward.</em></h2>
+              <Link to="/how-it-works" className="btn btn-ghost">Full route map for beginners →</Link>
+            </div>
             <div className="grid grid-3">
               <Step n="01" title="Find a vibe" body="Browse experiences by category, time, or mood. Every listing shows a clear hourly rate — no hidden fees, no membership wall." color="var(--lime-soft)" />
               <Step n="02" title="Book a seat" body="Pay only for the hours you book. Cancel free up to 24h before. Address shared once you're confirmed." color="var(--cobalt-soft)" />

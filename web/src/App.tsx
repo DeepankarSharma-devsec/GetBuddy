@@ -16,6 +16,11 @@ import BookingSuccess from './pages/BookingSuccess';
 import MyBookings from './pages/MyBookings';
 import MyBookingDetail from './pages/MyBookingDetail';
 import UserProfile from './pages/UserProfile';
+import HostPublicProfile from './pages/HostPublicProfile';
+import HowItWorks from './pages/HowItWorks';
+import Visiting from './pages/Visiting';
+import Communities from './pages/Communities';
+import CommunityDetail from './pages/CommunityDetail';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Terms from './pages/Terms';
 
@@ -44,6 +49,11 @@ function App() {
         <Route path="/my-bookings" element={<MyBookings />} />
         <Route path="/my-bookings/:id" element={<MyBookingDetail />} />
         <Route path="/profile" element={<UserProfile />} />
+        <Route path="/hosts/:id" element={<HostPublicProfile />} />
+        <Route path="/how-it-works" element={<HowItWorks />} />
+        <Route path="/visiting" element={<Visiting />} />
+        <Route path="/communities" element={<Communities />} />
+        <Route path="/communities/:id" element={<CommunityDetail />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<Terms />} />
         
@@ -53,6 +63,7 @@ function App() {
         <Route path="/host/onboarding/profile" element={<HostProfileSetup />} />
         <Route path="/host/dashboard" element={<HostDashboard />} />
         <Route path="/host/create" element={<CreateListing />} />
+        <Route path="/host/edit/:id" element={<CreateListing />} />
         <Route path="/host/bookings" element={<HostBookings />} />
         <Route path="/host/calendar" element={<HostCalendar />} />
         <Route path="/host/earnings" element={<HostEarnings />} />
@@ -65,9 +76,6 @@ function App() {
         <Route path="/admin/bookings" element={<BookingsManagement />} />
         <Route path="/admin/transactions" element={<TransactionsScreen />} />
         <Route path="/admin/analytics" element={<AnalyticsScreen />} />
-
-        {/* Placeholder for Host Dashboard */}
-        <Route path="/host/dashboard" element={<div className="container"><h2>Host Dashboard (WIP)</h2></div>} />
       </Routes>
     </Router>
   );

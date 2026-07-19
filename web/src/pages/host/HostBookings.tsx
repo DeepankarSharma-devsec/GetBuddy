@@ -6,7 +6,8 @@ import { NavBar, Avatar, StatusPill, Spinner, Empty, colorForId, durationLabel, 
 interface Booking {
   id: number; listing_kind: string; event_title: string;
   start_time: string | null; duration_minutes: number | null; price: number; currency?: string;
-  guest_name: string; guest_email: string; status: string; created_at: string;
+  guest_name: string; guest_email: string; guest_city?: string | null; guest_photo?: string | null;
+  status: string; created_at: string;
 }
 
 export default function HostBookings() {
@@ -71,11 +72,11 @@ export default function HostBookings() {
                   {requests.map(b => (
                     <div key={b.id} className="card shadow" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center', justifyContent: 'space-between' }}>
                       <div className="row gap-16" style={{ minWidth: 260, flex: 1 }}>
-                        <Avatar name={b.guest_name} color={colorForId(b.id)} size={48} />
+                        <Avatar name={b.guest_name} color={colorForId(b.id)} size={48} src={b.guest_photo} />
                         <div>
                           <h3 className="h3" style={{ fontSize: 17, marginBottom: 4 }}>{b.event_title}</h3>
                           <div className="text-muted" style={{ fontSize: 12 }}>
-                            <strong style={{ color: 'var(--ink)' }}>{b.guest_name}</strong> · {b.guest_email}
+                            <strong style={{ color: 'var(--ink)' }}>{b.guest_name}</strong> · {b.guest_email}{b.guest_city ? ` · ${b.guest_city}` : ''}
                           </div>
                           <div className="text-muted mono" style={{ fontSize: 11, marginTop: 4 }}>
                             wants {slotLine(b)}
@@ -105,7 +106,7 @@ export default function HostBookings() {
                 <div className="stack gap-12">
                   {rest.map(b => (
                     <div key={b.id} className="card shadow" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 18, alignItems: 'center' }}>
-                      <Avatar name={b.guest_name} color={colorForId(b.id)} size={48} />
+                      <Avatar name={b.guest_name} color={colorForId(b.id)} size={48} src={b.guest_photo} />
                       <div>
                         <h3 className="h3" style={{ fontSize: 17, marginBottom: 4 }}>{b.event_title}</h3>
                         <div className="text-muted" style={{ fontSize: 12 }}>

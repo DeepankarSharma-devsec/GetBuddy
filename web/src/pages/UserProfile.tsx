@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, clearToken, getToken } from '../api';
-import { NavBar, Avatar, Spinner, countryName } from '../components/ui';
+import { api, clearToken, getToken, setIsHost } from '../api';
+import { NavBar, Avatar, Spinner, countryName, fileToDataUrl } from '../components/ui';
+import { useRef } from 'react';
 
-interface User { id: number; email: string; full_name: string; is_host: boolean; is_admin?: boolean; host_status?: string | null; country?: string; city: string | null; deletion_requested?: boolean; }
+interface User { id: number; email: string; full_name: string; is_host: boolean; is_admin?: boolean; host_status?: string | null; country?: string; city: string | null; profile_photo?: string | null; deletion_requested?: boolean; }
 
 export default function UserProfile() {
   const [user, setUser] = useState<User | null>(null);
@@ -15,11 +16,24 @@ export default function UserProfile() {
       try {
         const r = await api.get('/users/me');
         setUser(r.data);
+        setIsHost(!!r.data.is_host);  // keeps the navbar's become-host CTA honest
       } catch (e) { console.error(e); navigate('/login'); }
     })();
   }, [navigate]);
 
   const handleLogout = () => { clearToken(); navigate('/login'); };
+
+  const photoRef = useRef<HTMLInputElement>(null);
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file, 400);
+      const r = await api.put('/users/me', { profile_photo: dataUrl });
+      setUser(r.data);
+    } catch (err) { console.error(err); }
+  };
 
   // DPDPA right of access: download everything we hold as JSON
   const handleExport = async () => {
@@ -52,7 +66,14 @@ export default function UserProfile() {
           <h1 className="display-2" style={{ marginTop: 6, marginBottom: 24 }}>profile</h1>
 
           <div className="card shadow row gap-20" style={{ marginBottom: 20 }}>
-            <Avatar name={user.full_name} size={72} color="#FFD84D" />
+            <div style={{ position: 'relative' }}>
+              <input ref={photoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhoto} />
+              <button onClick={() => photoRef.current?.click()} title="Change photo"
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                <Avatar name={user.full_name} size={72} color="#FFD84D" src={user.profile_photo} />
+                <span className="pill" style={{ position: 'absolute', bottom: -4, right: -8, fontSize: 9 }}>edit</span>
+              </button>
+            </div>
             <div className="grow">
               <h2 className="h2" style={{ marginBottom: 4 }}>{user.full_name}</h2>
               <div className="text-muted" style={{ fontSize: 14 }}>{user.email}</div>

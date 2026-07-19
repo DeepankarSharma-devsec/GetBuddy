@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api, getToken } from '../api';
-import { NavBar, Photo, Avatar, Spinner, colorForId, CATEGORY_COLORS, durationLabel, totalPrice, sym } from '../components/ui';
+import { NavBar, Photo, Avatar, Stars, Spinner, colorForId, CATEGORY_COLORS, durationLabel, totalPrice, sym } from '../components/ui';
 
 interface Event {
   id: number;
@@ -18,20 +18,27 @@ interface Event {
   city?: string;
   duration_minutes?: number;
   max_participants?: number;
+  cover_image?: string | null;
+  traveller_friendly?: boolean;
 }
+
+interface HostCard { name: string; photo?: string | null; city?: string | null; rating?: number | null; review_count: number; }
 
 export default function ListingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [event, setEvent] = useState<Event | null>(null);
+  const [host, setHost] = useState<HostCard | null>(null);
   const [existingBookingId, setExistingBookingId] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const response = await api.get('/events');
-        const found = response.data.find((e: Event) => e.id.toString() === id);
-        if (found) setEvent(found);
+        const response = await api.get(`/events/${id}`);
+        const found: Event = response.data;
+        setEvent(found);
+        // Who's behind this listing (item 9) — name, photo, rating, profile link
+        api.get(`/hosts/${found.host_id}/public`).then(r => setHost(r.data)).catch(() => {});
         if (getToken() && found) {
           try {
             const r = await api.get('/users/me/bookings');
@@ -54,28 +61,36 @@ export default function ListingDetail() {
           <button className="btn btn-subtle btn-sm" style={{ marginBottom: 20 }} onClick={() => navigate(-1)}>← Back</button>
 
           <div style={{ borderRadius: 'var(--r-lg)', overflow: 'hidden', border: 'var(--border-card)', marginBottom: 28 }}>
-            <Photo label={event.category || event.event_type} color={CATEGORY_COLORS[event.category || ''] || colorForId(event.id)} height={360} radius={0} />
+            <Photo label={event.category || event.event_type} color={CATEGORY_COLORS[event.category || ''] || colorForId(event.id)} height={360} radius={0} src={event.cover_image || undefined} />
           </div>
 
           <div className="split-2">
             <div>
               <div className="row gap-8" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
-                {event.listing_kind === 'SERVICE' && <span className="pill pill-cobalt">buddy service</span>}
+                <span className={`pill ${event.listing_kind === 'SERVICE' ? 'pill-buddy' : 'pill-event'}`}>
+                  {event.listing_kind === 'SERVICE' ? '🤝 buddy service' : '🎟 event'}
+                </span>
                 {event.category && <span className="pill">{event.category}</span>}
                 {event.listing_kind !== 'SERVICE' && <span className="pill pill-cobalt">{event.event_type}</span>}
                 <span className="pill pill-mint">{event.mode}</span>
                 {event.city && <span className="pill">{event.city}</span>}
+                {event.traveller_friendly && <span className="pill pill-yellow">✈ visitor-friendly</span>}
               </div>
               <h1 className="display-2" style={{ marginBottom: 12 }}>{event.title}</h1>
-              <div className="row gap-12" style={{ marginBottom: 28 }}>
-                <Avatar name={`H${event.host_id}`} color={colorForId(event.host_id)} size={44} />
-                <div>
-                  <div style={{ fontWeight: 600 }}>Host #{event.host_id}</div>
-                  <div className="row gap-6" style={{ fontSize: 12 }}>
+              <Link to={`/hosts/${event.host_id}`} className="row gap-12 card-soft card-clickable" style={{ marginBottom: 28, padding: 12 }}>
+                <Avatar name={host?.name || `H${event.host_id}`} color={colorForId(event.host_id)} size={44} src={host?.photo} />
+                <div className="grow">
+                  <div style={{ fontWeight: 600 }}>{host?.name || `Host #${event.host_id}`}</div>
+                  <div className="row gap-6" style={{ fontSize: 12, flexWrap: 'wrap' }}>
                     <span className="pill pill-mint">phone verified</span>
+                    {host && host.review_count > 0 && host.rating != null && (
+                      <span className="row gap-4"><Stars value={host.rating} /> <span className="text-muted">({host.review_count})</span></span>
+                    )}
+                    {host?.city && <span className="text-muted">{host.city}</span>}
                   </div>
                 </div>
-              </div>
+                <span className="btn btn-ghost btn-sm">View profile →</span>
+              </Link>
 
               <div className="card-soft" style={{ marginBottom: 16 }}>
                 <div className="section-h">about this experience</div>

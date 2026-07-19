@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&display=swap');
 
 :root {
   --bg: #FAF7F2;
@@ -22,6 +22,18 @@
   --accent: var(--lime);
   --accent-on: var(--ink);
   --accent-soft: var(--lime-soft);
+
+  /* items 7/8: events and buddy services each own a colour so the two
+     surfaces read as different products */
+  --accent-event: var(--coral);
+  --accent-event-soft: var(--coral-soft);
+  --accent-buddy: var(--cobalt);
+  --accent-buddy-soft: var(--cobalt-soft);
+
+  /* item 13: vintage identity accents */
+  --vintage-cream: #F6EFDF;
+  --vintage-sepia: #8A6A45;
+  --serif: 'Fraunces', Georgia, serif;
 
   --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --display: 'Space Grotesk', 'Inter', sans-serif;
@@ -399,6 +411,76 @@ button, a, .chip { touch-action: manipulation; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* listing form + examples rail (item 6) */
+@media (max-width: 900px) {
+  .create-split { grid-template-columns: 1fr !important; }
+}
+
+/* notification bell */
+.bell-btn {
+  position: relative; display: inline-flex; align-items: center;
+  background: none; border: none; cursor: pointer;
+  padding: 8px 10px; border-radius: var(--r-pill);
+}
+.bell-btn:hover { background: var(--accent-soft); }
+.bell-badge {
+  position: absolute; top: 2px; right: 2px;
+  background: var(--coral); color: #fff;
+  font-size: 9px; font-weight: 700; line-height: 1;
+  padding: 3px 5px; border-radius: 99px;
+}
+.bell-menu {
+  position: absolute; right: 0; top: calc(100% + 8px);
+  width: 320px; max-height: 420px; overflow-y: auto;
+  background: var(--paper); border: var(--border-card);
+  border-radius: var(--r-md); box-shadow: var(--shadow-card);
+  z-index: 100;
+}
+.bell-item {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; cursor: pointer;
+  padding: 10px 14px; border-top: 1px solid var(--line);
+}
+.bell-item:hover { background: var(--accent-soft); }
+@media (max-width: 600px) { .bell-menu { position: fixed; left: 12px; right: 12px; width: auto; top: 64px; } }
+
+/* items 7/8: kind-specific surfaces */
+.kind-strip {
+  height: 6px; border-radius: 99px; margin-bottom: 14px;
+}
+.kind-strip.event { background: var(--accent-event); }
+.kind-strip.buddy { background: var(--accent-buddy); }
+.pill-event { background: var(--accent-event-soft); color: #B63B22; }
+.pill-buddy { background: var(--accent-buddy-soft); color: var(--accent-buddy); }
+.hero-buddy { background: var(--accent-buddy-soft); }
+.hero-host { background: var(--vintage-cream); }
+
+/* item 13: vintage accents — landing + explore headlines & badges */
+.vintage-head {
+  font-family: var(--serif) !important;
+  font-weight: 600; letter-spacing: -0.01em;
+}
+.vintage-head em, .vintage-head .fancy { font-style: italic; font-weight: 400; }
+.ticket-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--vintage-sepia);
+  background: var(--vintage-cream);
+  border: 1px dashed var(--vintage-sepia);
+  border-radius: 4px; padding: 5px 12px;
+}
+.stamp {
+  display: inline-grid; place-items: center;
+  font-family: var(--serif); font-style: italic; font-size: 11px;
+  color: var(--vintage-sepia);
+  border: 1.5px solid var(--vintage-sepia);
+  border-radius: 50%;
+  width: 74px; height: 74px;
+  transform: rotate(-8deg);
+  text-align: center; line-height: 1.2; padding: 6px;
+  opacity: 0.85;
 }
 
 /* skeleton */

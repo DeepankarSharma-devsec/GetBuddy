@@ -58,6 +58,9 @@ class HostProfile(Base):
     expertise = Column(String, nullable=True)
     category = Column(String, nullable=True)
     city = Column(String, nullable=True)
+    instagram = Column(String, nullable=True)
+    linkedin = Column(String, nullable=True)
+    website = Column(String, nullable=True)
     total_earnings = Column(Float, default=0.0)
     
     user = relationship("User", back_populates="host_profile")
@@ -87,7 +90,11 @@ class Event(Base):
     duration_minutes = Column(Integer, default=60)
     max_participants = Column(Integer, default=1)
     status = Column(String, default=ListingStatus.ACTIVE)
-    
+    traveller_friendly = Column(Boolean, default=False)  # highlighted to visitors/foreigners
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))  # 1-hour edit window
+    # Community-only listings are hidden from the public catalog
+    community_id = Column(Integer, ForeignKey("communities.id"), nullable=True)
+
     host_id = Column(Integer, ForeignKey("host_profiles.id"))
     host = relationship("HostProfile", back_populates="events")
     bookings = relationship("Booking", back_populates="event")
@@ -138,6 +145,55 @@ class Review(Base):
     user = relationship("User", back_populates="reviews_given")
     host = relationship("HostProfile", back_populates="reviews_received")
     event = relationship("Event", back_populates="reviews")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    title = Column(String)
+    body = Column(Text, nullable=True)
+    link = Column(String, nullable=True)  # in-app path, e.g. /host/bookings
+    read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class Community(Base):
+    # A host-managed group (society, PG, club...) with its own private listings.
+    __tablename__ = "communities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String)
+    description = Column(Text, nullable=True)
+    city = Column(String, nullable=True)
+    cover_image = Column(String, nullable=True)
+    invite_code = Column(String, unique=True, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    subgroups = relationship("CommunitySubgroup", back_populates="community")
+    members = relationship("CommunityMember", back_populates="community")
+
+class CommunitySubgroup(Base):
+    # Interest circles inside a community: food, PG, rent, sports...
+    __tablename__ = "community_subgroups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    community_id = Column(Integer, ForeignKey("communities.id"), index=True)
+    name = Column(String)
+    interest = Column(String, nullable=True)
+
+    community = relationship("Community", back_populates="subgroups")
+
+class CommunityMember(Base):
+    __tablename__ = "community_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    community_id = Column(Integer, ForeignKey("communities.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    joined_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    community = relationship("Community", back_populates="members")
+    user = relationship("User")
 
 class Setting(Base):
     # Simple key/value store for admin-tunable config (e.g. commission_rate).

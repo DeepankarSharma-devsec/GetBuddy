@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, getToken } from '../../api';
-import { NavBar, Spinner, sym } from '../../components/ui';
+import { api, getToken, setIsHost } from '../../api';
+import { NavBar, Spinner, StatusPill, sym } from '../../components/ui';
 
 interface User { id: number; is_host: boolean; full_name: string; host_status?: string | null; }
+interface Listing {
+  id: number; listing_kind: string; title: string; status: string; price: number; currency?: string;
+  city?: string | null; editable: boolean; editable_until?: string | null;
+}
 
 export default function HostDashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [metrics, setMetrics] = useState({ total_earnings: 0, currency: 'INR', active_listings: 0, total_bookings: 0 });
+  const [listings, setListings] = useState<Listing[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -15,6 +20,7 @@ export default function HostDashboard() {
       if (!getToken()) { navigate('/login'); return; }
       try {
         const u = await api.get('/users/me');
+        setIsHost(!!u.data.is_host);
         // Not yet applied → send to onboarding
         if (!u.data.is_host && !u.data.host_status) { navigate('/host/onboarding'); return; }
         setUser(u.data);
@@ -22,6 +28,7 @@ export default function HostDashboard() {
         if (u.data.is_host) {
           const m = await api.get('/host/me/metrics');
           setMetrics(m.data);
+          api.get('/host/me/listings').then(r => setListings(r.data)).catch(() => {});
         }
       } catch (e) { console.error(e); navigate('/login'); }
     })();
@@ -100,12 +107,46 @@ export default function HostDashboard() {
           </div>
 
           <div className="eyebrow" style={{ marginBottom: 12 }}>quick actions</div>
-          <div className="grid grid-4">
+          <div className="grid grid-4" style={{ marginBottom: 32 }}>
             <Action label="Bookings" hint="Manage upcoming guests" onClick={() => navigate('/host/bookings')} color="#F1FBCB" />
             <Action label="Calendar" hint="See your schedule" onClick={() => navigate('/host/calendar')} color="#E4E8FF" />
             <Action label="Earnings" hint="Payouts & history" onClick={() => navigate('/host/earnings')} color="#FFE3DB" />
-            <Action label="New listing" hint="Publish a session" onClick={() => navigate('/host/create')} color="#FFD84D" />
+            <Action label="Communities" hint="Run your own crowd" onClick={() => navigate('/communities')} color="#C8F0D4" />
           </div>
+
+          {listings.length > 0 && (
+            <>
+              <div className="eyebrow" style={{ marginBottom: 12 }}>your listings</div>
+              <div className="stack gap-12">
+                {listings.map(l => (
+                  <div key={l.id} className="card shadow" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="row gap-12" style={{ minWidth: 240, flex: 1 }}>
+                      <span className={`pill ${l.listing_kind === 'SERVICE' ? 'pill-buddy' : 'pill-event'}`}>
+                        {l.listing_kind === 'SERVICE' ? 'buddy' : 'event'}
+                      </span>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{l.title}</div>
+                        <div className="text-muted mono" style={{ fontSize: 11 }}>
+                          {sym(l.currency)}{Math.round(l.price).toLocaleString()}/hr{l.city ? ` · ${l.city}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="row gap-8">
+                      <StatusPill status={l.status} />
+                      {l.editable ? (
+                        <button className="btn btn-subtle btn-sm" onClick={() => navigate(`/host/edit/${l.id}`)}>
+                          ✎ Edit{l.editable_until ? ` (until ${new Date(l.editable_until + 'Z').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})` : ''}
+                        </button>
+                      ) : (
+                        <span className="text-muted mono" style={{ fontSize: 10 }}>edit window closed</span>
+                      )}
+                      <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/listing/${l.id}`)}>View →</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </>

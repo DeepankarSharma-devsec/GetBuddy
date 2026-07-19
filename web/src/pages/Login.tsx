@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
-import { API_BASE, setToken, setIsAdmin, apiError } from '../api';
+import { API_BASE, setToken, setIsAdmin, setIsHost, apiError } from '../api';
 import { Wordmark, COUNTRIES, getCountry, setCountry } from '../components/ui';
 
 export default function Login() {
@@ -38,6 +38,7 @@ export default function Login() {
         try {
           const me = await axios.get(`${API_BASE}/users/me`, { headers: { Authorization: `Bearer ${response.data.access_token}` } });
           if (me.data?.country) setCountry(me.data.country);
+          setIsHost(!!me.data?.is_host);
         } catch {}
         // Admins land in the admin portal, not the guest catalog
         navigate(response.data.is_admin ? '/admin/dashboard' : '/explore');

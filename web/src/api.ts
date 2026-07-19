@@ -36,7 +36,10 @@ export function apiError(e: unknown, fallback: string): string {
 }
 
 export const getToken = () => localStorage.getItem('token');
-export const clearToken = () => { localStorage.removeItem('token'); localStorage.removeItem('is_admin'); };
+export const clearToken = () => { localStorage.removeItem('token'); localStorage.removeItem('is_admin'); localStorage.removeItem('is_host'); };
 export const setToken = (t: string) => localStorage.setItem('token', t);
 export const setIsAdmin = (v: boolean) => localStorage.setItem('is_admin', v ? '1' : '0');
 export const isAdmin = () => localStorage.getItem('is_admin') === '1';
+// Cached from /users/me so the navbar can hide "Become a host" for hosts
+export const setIsHost = (v: boolean) => localStorage.setItem('is_host', v ? '1' : '0');
+export const isHost = () => localStorage.getItem('is_host') === '1';

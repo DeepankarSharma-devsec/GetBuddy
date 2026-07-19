@@ -5,9 +5,9 @@ from datetime import datetime
 class UserBase(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=1, max_length=100)
-    country: str = Field(default="IN", pattern="^(IN|US|GB|JP|KR)$")
+    country: str = Field(default="IN", pattern="^[A-Z]{2}$")  # any ISO country — hosts can be anywhere
     city: Optional[str] = None
-    profile_photo: Optional[str] = None
+    profile_photo: Optional[str] = Field(default=None, max_length=700_000)  # base64 data-URL, ~500KB image
 
 class UserCreate(UserBase):
     password: str = Field(min_length=8, max_length=128)
@@ -23,6 +23,11 @@ class User(UserBase):
 
     class Config:
         from_attributes = True
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    city: Optional[str] = Field(default=None, max_length=100)
+    profile_photo: Optional[str] = Field(default=None, max_length=700_000)
 
 class Token(BaseModel):
     access_token: str
@@ -45,6 +50,9 @@ class HostProfileUpdate(BaseModel):
     expertise: Optional[str] = Field(default=None, max_length=200)
     category: Optional[str] = Field(default=None, max_length=100)
     city: Optional[str] = Field(default=None, max_length=100)
+    instagram: Optional[str] = Field(default=None, max_length=200)
+    linkedin: Optional[str] = Field(default=None, max_length=200)
+    website: Optional[str] = Field(default=None, max_length=200)
 
 class HostApply(BaseModel):
     phone_number: str = Field(min_length=5, max_length=20)
@@ -79,11 +87,13 @@ class EventBase(BaseModel):
     mode: str
     category: Optional[str] = None
     city: Optional[str] = None
-    cover_image: Optional[str] = None
+    cover_image: Optional[str] = Field(default=None, max_length=700_000)  # base64 data-URL, ~500KB image
     start_time: Optional[datetime] = None  # required for EVENT, ignored for SERVICE
     duration_minutes: int = Field(default=60, gt=0)
     max_participants: int = Field(default=1, gt=0)
     status: str = "ACTIVE"
+    traveller_friendly: bool = False
+    community_id: Optional[int] = None  # community-only listing, hidden from public catalog
 
 class EventCreate(EventBase):
     # Address / meeting link — private, only shown to confirmed guests
@@ -95,6 +105,7 @@ class Event(EventBase):
     host_id: int
     country: str = "IN"
     currency: str = "INR"
+    created_at: Optional[datetime] = None  # drives the 1-hour edit window in the host UI
 
     class Config:
         from_attributes = True
@@ -133,6 +144,30 @@ class Transaction(BaseModel):
 
     class Config:
         from_attributes = True
+
+class Notification(BaseModel):
+    id: int
+    title: str
+    body: Optional[str] = None
+    link: Optional[str] = None
+    read: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class CommunityCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    city: Optional[str] = Field(default=None, max_length=100)
+    cover_image: Optional[str] = Field(default=None, max_length=700_000)
+
+class CommunityJoin(BaseModel):
+    invite_code: str = Field(min_length=1, max_length=32)
+
+class SubgroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    interest: Optional[str] = Field(default=None, max_length=50)
 
 class SettingsUpdate(BaseModel):
     # Fractions, e.g. 0.15 = 15%. Both optional so either can be updated alone.

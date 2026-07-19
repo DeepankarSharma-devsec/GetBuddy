@@ -1,9 +1,10 @@
 import os
+import secrets
 import stripe
 from fastapi import FastAPI, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
@@ -16,8 +17,27 @@ from .database import engine, get_db
 
 app = FastAPI(title="GetBuddy API")
 
-# Supported countries and their local currency — listings are priced in the host's currency
-COUNTRIES = {"IN": "INR", "US": "USD", "GB": "GBP", "JP": "JPY", "KR": "KRW"}
+# Country → local currency — listings are priced in the host's currency.
+# Hosts can be anywhere; unknown codes fall back to USD.
+COUNTRIES = {
+    "IN": "INR", "US": "USD", "GB": "GBP", "JP": "JPY", "KR": "KRW",
+    "AE": "AED", "SG": "SGD", "AU": "AUD", "CA": "CAD", "NZ": "NZD",
+    "DE": "EUR", "FR": "EUR", "ES": "EUR", "IT": "EUR", "NL": "EUR",
+    "PT": "EUR", "IE": "EUR", "AT": "EUR", "BE": "EUR", "FI": "EUR", "GR": "EUR",
+    "CH": "CHF", "SE": "SEK", "NO": "NOK", "DK": "DKK", "PL": "PLN",
+    "CZ": "CZK", "HU": "HUF", "RO": "RON", "TR": "TRY", "UA": "UAH",
+    "CN": "CNY", "HK": "HKD", "TW": "TWD", "TH": "THB", "VN": "VND",
+    "ID": "IDR", "MY": "MYR", "PH": "PHP", "BD": "BDT", "PK": "PKR",
+    "LK": "LKR", "NP": "NPR", "SA": "SAR", "QA": "QAR", "KW": "KWD",
+    "BH": "BHD", "OM": "OMR", "IL": "ILS", "EG": "EGP", "ZA": "ZAR",
+    "NG": "NGN", "KE": "KES", "GH": "GHS", "MA": "MAD", "BR": "BRL",
+    "MX": "MXN", "AR": "ARS", "CL": "CLP", "CO": "COP", "PE": "PEN",
+}
+
+def currency_for(country: Optional[str]) -> str:
+    return COUNTRIES.get(country or "IN", "USD")
+
+EDIT_WINDOW = timedelta(hours=1)  # hosts can rectify a listing for 1 hour after publishing
 
 # Comma-separated list, e.g. "https://getbuddy.example.com,https://www.getbuddy.example.com"
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")]
@@ -32,7 +52,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 # Safety latch: a live key can move real money. It only works once the app is
 # actually deployed and you explicitly set STRIPE_ALLOW_LIVE=true.
 STRIPE_ALLOW_LIVE = os.getenv("STRIPE_ALLOW_LIVE") == "true"
-ZERO_DECIMAL_CURRENCIES = {"JPY", "KRW"}  # Stripe amounts for these are not in cents
+ZERO_DECIMAL_CURRENCIES = {"JPY", "KRW", "VND", "CLP"}  # Stripe amounts for these are not in cents
 
 # Admin-tunable rates (settings table); these are the fallbacks.
 DEFAULT_COMMISSION_RATE = 0.15
@@ -123,6 +143,10 @@ app.add_middleware(
 def health():
     return {"status": "ok"}
 
+def notify(db: Session, user_id: int, title: str, body: str = "", link: str = ""):
+    """Queue an in-app notification. Caller commits."""
+    db.add(models.Notification(user_id=user_id, title=title, body=body or None, link=link or None))
+
 @app.post("/register", response_model=schemas.User)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     email = user.email.lower()
@@ -205,7 +229,7 @@ def get_my_host_metrics(db: Session = Depends(get_db), current_user: models.User
 
     return {
         "total_earnings": earnings,
-        "currency": COUNTRIES.get(current_user.country or "IN", "INR"),
+        "currency": currency_for(current_user.country),
         "active_listings": active_listings,
         "total_bookings": total_bookings
     }
@@ -242,7 +266,9 @@ def get_host_managed_bookings(db: Session = Depends(get_db), current_user: model
             "price": ev.price,
             "currency": ev.currency or "INR",
             "guest_name": user.full_name if user else "Unknown Guest",
-            "guest_email": user.email if user else "Unknown Email"
+            "guest_email": user.email if user else "Unknown Email",
+            "guest_city": user.city if user else None,
+            "guest_photo": user.profile_photo if user else None,
         })
     return enhanced
 
@@ -260,6 +286,8 @@ def accept_booking_request(booking_id: int, db: Session = Depends(get_db), curre
     if not stripe_enabled():
         # ponytail: mock path — no Stripe keys, settle instantly for local dev
         _settle_booking(db, booking, booking.event)
+    notify(db, booking.user_id, "Request accepted 🎉",
+           f"Your buddy accepted your request for “{booking.event.title}”.", f"/my-bookings/{booking.id}")
     db.commit()
     return {"id": booking.id, "status": booking.status, "payment_status": booking.payment_status}
 
@@ -274,6 +302,8 @@ def decline_booking_request(booking_id: int, db: Session = Depends(get_db), curr
     if booking.status != "REQUESTED":
         raise HTTPException(status_code=400, detail="This request has already been handled.")
     booking.status = "DECLINED"
+    notify(db, booking.user_id, "Request declined",
+           f"Your request for “{booking.event.title}” was declined. Browse other buddies nearby.", "/explore")
     db.commit()
     return {"id": booking.id, "status": booking.status}
 
@@ -323,9 +353,14 @@ def create_event(event: schemas.EventCreate, db: Session = Depends(get_db), curr
         data["start_time"] = None  # guests pick the time when they book
         if not data.get("city") and event.mode == "Offline":
             raise HTTPException(status_code=400, detail="In-person services need a city so guests can find you.")
+    # Community-only listings: only the community's owner can post into it
+    if data.get("community_id"):
+        community = db.query(models.Community).filter(models.Community.id == data["community_id"]).first()
+        if not community or community.owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You can only post listings into a community you manage.")
     # Listing lives in the host's country and is priced in its currency
     data["country"] = current_user.country or "IN"
-    data["currency"] = COUNTRIES.get(data["country"], "INR")
+    data["currency"] = currency_for(data["country"])
     db_event = models.Event(**data, host_id=current_user.host_profile.id)
     db.add(db_event)
     db.commit()
@@ -333,14 +368,84 @@ def create_event(event: schemas.EventCreate, db: Session = Depends(get_db), curr
     return db_event
 
 @app.get("/events", response_model=List[schemas.Event])
-def list_events(kind: Optional[str] = None, country: Optional[str] = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    # Public catalog: only live listings, no private location details (see schema)
-    q = db.query(models.Event).filter(models.Event.status == "ACTIVE")
+def list_events(kind: Optional[str] = None, country: Optional[str] = None, city: Optional[str] = None,
+                q: Optional[str] = None, category: Optional[str] = None, mode: Optional[str] = None,
+                traveller: Optional[bool] = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    # Public catalog: only live, non-community listings; no private location details (see schema)
+    query = db.query(models.Event).filter(models.Event.status == "ACTIVE", models.Event.community_id.is_(None))
     if kind in ("EVENT", "SERVICE"):
-        q = q.filter(models.Event.listing_kind == kind)
+        query = query.filter(models.Event.listing_kind == kind)
     if country in COUNTRIES:
-        q = q.filter(models.Event.country == country)
-    return q.offset(skip).limit(limit).all()
+        query = query.filter(models.Event.country == country)
+    if city:
+        query = query.filter(models.Event.city.ilike(f"%{city.strip()}%"))
+    if q:
+        query = query.filter(models.Event.title.ilike(f"%{q.strip()}%") | models.Event.description.ilike(f"%{q.strip()}%"))
+    if category:
+        query = query.filter(models.Event.category == category)
+    if mode in ("Online", "Offline"):
+        query = query.filter(models.Event.mode == mode)
+    if traveller:
+        query = query.filter(models.Event.traveller_friendly.is_(True))
+    return query.offset(skip).limit(limit).all()
+
+def _edit_deadline(event: models.Event) -> Optional[datetime]:
+    return (event.created_at + EDIT_WINDOW) if event.created_at else None
+
+@app.get("/host/me/listings")
+def get_my_listings(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_host)):
+    events = db.query(models.Event).filter(models.Event.host_id == current_user.host_profile.id).order_by(models.Event.id.desc()).all()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)  # DB datetimes are naive UTC
+    out = []
+    for e in events:
+        deadline = _edit_deadline(e)
+        out.append({
+            "id": e.id, "listing_kind": e.listing_kind, "title": e.title, "status": e.status,
+            "price": e.price, "currency": e.currency or "INR", "city": e.city, "category": e.category,
+            "start_time": e.start_time, "created_at": e.created_at, "cover_image": e.cover_image,
+            "community_id": e.community_id,
+            "editable": bool(deadline and now < deadline),
+            "editable_until": deadline,
+        })
+    return out
+
+@app.get("/events/{event_id}", response_model=schemas.Event)
+def get_event(event_id: int, db: Session = Depends(get_db)):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    return event
+
+@app.put("/events/{event_id}", response_model=schemas.Event)
+def update_event(event_id: int, update: schemas.EventCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_host)):
+    """Rectification window: hosts can edit a listing for 1 hour after creating it."""
+    event = db.query(models.Event).filter(
+        models.Event.id == event_id,
+        models.Event.host_id == current_user.host_profile.id,
+    ).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    deadline = _edit_deadline(event)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if not deadline or now >= deadline:
+        raise HTTPException(status_code=403, detail="The 1-hour edit window for this listing has closed.")
+    data = update.model_dump()
+    if data["listing_kind"] == "EVENT" and not data.get("start_time"):
+        raise HTTPException(status_code=400, detail="Events need a date & time.")
+    if data["listing_kind"] == "SERVICE":
+        data["start_time"] = None
+    data.pop("community_id", None)  # can't move a listing between communities after creation
+    for field, value in data.items():
+        setattr(event, field, value)
+    db.commit()
+    db.refresh(event)
+    return event
+
+@app.get("/host/me/profile")
+def get_my_host_profile(current_user: models.User = Depends(auth.get_current_host)):
+    p = current_user.host_profile
+    return {"bio": p.bio, "expertise": p.expertise, "category": p.category, "city": p.city,
+            "instagram": p.instagram, "linkedin": p.linkedin, "website": p.website}
 
 @app.put("/host/me/profile", response_model=schemas.User)
 def update_host_profile(update: schemas.HostProfileUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_host)):
@@ -399,6 +504,8 @@ def book_event(booking: schemas.BookingCreate, db: Session = Depends(get_db), cu
             start_time=booking.start_time, duration_minutes=booking.duration_minutes,
         )
         db.add(db_booking)
+        notify(db, event.host.user_id, "New buddy request",
+               f"{current_user.full_name} requested “{event.title}”. Accept or decline it.", "/host/bookings")
         db.commit()
         db.refresh(db_booking)
         return db_booking
@@ -437,6 +544,8 @@ def book_event(booking: schemas.BookingCreate, db: Session = Depends(get_db), cu
     db.refresh(db_booking)
 
     _settle_booking(db, db_booking, event)
+    notify(db, event.host.user_id, "New booking 🎟",
+           f"{current_user.full_name} booked a seat at “{event.title}”.", "/host/bookings")
 
     db.commit()
     return db_booking
@@ -471,13 +580,72 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         if booking and booking.payment_status != "PAID":
             booking.status = "CONFIRMED"
             _settle_booking(db, booking, booking.event)
+            notify(db, booking.event.host.user_id, "New booking 🎟",
+                   f"A guest booked a seat at “{booking.event.title}”.", "/host/bookings")
             db.commit()
     return {"received": True}
+
+# ---- PUBLIC HOST PROFILE ----
+@app.get("/hosts/{host_id}/public")
+def get_public_host_profile(host_id: int, db: Session = Depends(get_db)):
+    """What guests see before booking: who the host is, their listings, and reviews."""
+    profile = db.query(models.HostProfile).filter(
+        models.HostProfile.id == host_id, models.HostProfile.status == "APPROVED",
+    ).first()
+    if not profile or not profile.user:
+        raise HTTPException(status_code=404, detail="Host not found")
+    reviews = db.query(models.Review).filter(models.Review.host_id == profile.id).all()
+    avg = round(sum(r.star_rating for r in reviews) / len(reviews), 1) if reviews else None
+    listings = db.query(models.Event).filter(
+        models.Event.host_id == profile.id, models.Event.status == "ACTIVE",
+        models.Event.community_id.is_(None),
+    ).all()
+    return {
+        "host_id": profile.id,
+        "name": profile.user.full_name,
+        "photo": profile.user.profile_photo,
+        "bio": profile.bio,
+        "expertise": profile.expertise,
+        "category": profile.category,
+        "city": profile.city or profile.user.city,
+        "country": profile.user.country,
+        "phone_verified": profile.phone_verified,
+        "member_since": profile.user.created_at,
+        "instagram": profile.instagram,
+        "linkedin": profile.linkedin,
+        "website": profile.website,
+        "rating": avg,
+        "review_count": len(reviews),
+        "reviews": [{"star_rating": r.star_rating, "review_text": r.review_text, "created_at": r.created_at} for r in reviews[:10]],
+        "listings": [schemas.Event.model_validate(e) for e in listings],
+    }
 
 # ---- USERS ----
 @app.get("/users/me", response_model=schemas.User)
 def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
+
+@app.put("/users/me", response_model=schemas.User)
+def update_users_me(update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    for field, value in update.model_dump(exclude_unset=True).items():
+        setattr(current_user, field, value)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+# ---- NOTIFICATIONS ----
+@app.get("/users/me/notifications", response_model=List[schemas.Notification])
+def get_my_notifications(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    return (db.query(models.Notification).filter(models.Notification.user_id == current_user.id)
+            .order_by(models.Notification.id.desc()).limit(50).all())
+
+@app.post("/users/me/notifications/read")
+def mark_notifications_read(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id, models.Notification.read.is_(False),
+    ).update({"read": True})
+    db.commit()
+    return {"detail": "ok"}
 
 @app.get("/users/me/bookings", response_model=List[schemas.Booking])
 def get_my_bookings(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
@@ -514,6 +682,94 @@ def get_my_booking_detail(booking_id: int, db: Session = Depends(get_db), curren
             "location_details": e.location_details if (booking.status == "CONFIRMED" and booking.payment_status == "PAID") else None,
         },
     }
+
+# ---- COMMUNITIES ----
+# A host runs a community (society, PG, club); people join with an invite code.
+# Sub-groups split the crowd by interest (food, rent, sports...). Community
+# listings are private — visible only inside the community, not on Explore.
+
+def _community_or_404(db: Session, community_id: int) -> models.Community:
+    c = db.query(models.Community).filter(models.Community.id == community_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Community not found")
+    return c
+
+def _is_member(db: Session, community: models.Community, user_id: int) -> bool:
+    if community.owner_id == user_id:
+        return True
+    return db.query(models.CommunityMember).filter(
+        models.CommunityMember.community_id == community.id,
+        models.CommunityMember.user_id == user_id,
+    ).first() is not None
+
+def _community_summary(c: models.Community, db: Session, user_id: int) -> dict:
+    return {
+        "id": c.id, "name": c.name, "description": c.description, "city": c.city,
+        "cover_image": c.cover_image, "created_at": c.created_at,
+        "is_owner": c.owner_id == user_id,
+        "member_count": db.query(models.CommunityMember).filter(models.CommunityMember.community_id == c.id).count(),
+        # The share code is only for the owner to hand out
+        "invite_code": c.invite_code if c.owner_id == user_id else None,
+    }
+
+@app.post("/communities")
+def create_community(payload: schemas.CommunityCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_host)):
+    community = models.Community(
+        owner_id=current_user.id, invite_code=secrets.token_hex(4),
+        **payload.model_dump(),
+    )
+    db.add(community)
+    db.commit()
+    db.refresh(community)
+    return _community_summary(community, db, current_user.id)
+
+@app.get("/communities/mine")
+def my_communities(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    owned = db.query(models.Community).filter(models.Community.owner_id == current_user.id).all()
+    memberships = db.query(models.CommunityMember).filter(models.CommunityMember.user_id == current_user.id).all()
+    joined = [m.community for m in memberships if m.community and m.community.owner_id != current_user.id]
+    return [_community_summary(c, db, current_user.id) for c in owned + joined]
+
+@app.post("/communities/join")
+def join_community(payload: schemas.CommunityJoin, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    community = db.query(models.Community).filter(models.Community.invite_code == payload.invite_code.strip().lower()).first()
+    if not community:
+        raise HTTPException(status_code=404, detail="No community found for that invite code.")
+    if _is_member(db, community, current_user.id):
+        raise HTTPException(status_code=400, detail="You're already a member of this community.")
+    db.add(models.CommunityMember(community_id=community.id, user_id=current_user.id))
+    notify(db, community.owner_id, "New community member",
+           f"{current_user.full_name} joined “{community.name}”.", f"/communities/{community.id}")
+    db.commit()
+    return _community_summary(community, db, current_user.id)
+
+@app.get("/communities/{community_id}")
+def get_community(community_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    community = _community_or_404(db, community_id)
+    if not _is_member(db, community, current_user.id):
+        raise HTTPException(status_code=403, detail="Members only — ask the owner for an invite code.")
+    members = db.query(models.CommunityMember).filter(models.CommunityMember.community_id == community.id).all()
+    events = db.query(models.Event).filter(
+        models.Event.community_id == community.id, models.Event.status == "ACTIVE",
+    ).all()
+    owner = db.query(models.User).filter(models.User.id == community.owner_id).first()
+    return {
+        **_community_summary(community, db, current_user.id),
+        "owner_name": owner.full_name if owner else "Unknown",
+        "subgroups": [{"id": s.id, "name": s.name, "interest": s.interest} for s in community.subgroups],
+        "members": [{"id": m.user_id, "name": m.user.full_name if m.user else "?", "photo": m.user.profile_photo if m.user else None, "joined_at": m.joined_at} for m in members],
+        "events": [schemas.Event.model_validate(e) for e in events],
+    }
+
+@app.post("/communities/{community_id}/subgroups")
+def create_subgroup(community_id: int, payload: schemas.SubgroupCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    community = _community_or_404(db, community_id)
+    if community.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the community owner can add sub-groups.")
+    sub = models.CommunitySubgroup(community_id=community.id, **payload.model_dump())
+    db.add(sub)
+    db.commit()
+    return {"id": sub.id, "name": sub.name, "interest": sub.interest}
 
 # ---- DPDPA: data export + account deletion ----
 @app.get("/users/me/export")
@@ -622,7 +878,7 @@ def get_admin_hosts(skip: int = 0, limit: int = 100, db: Session = Depends(get_d
         "phone_number": h.phone_number, "status": h.status,
         "bio": h.bio, "category": h.category, "city": h.city,
         "country": h.user.country if h.user else "IN",
-        "currency": COUNTRIES.get(h.user.country if h.user else "IN", "INR"),
+        "currency": currency_for(h.user.country if h.user else "IN"),
         "total_earnings": h.total_earnings,
     } for h in hosts]
 
@@ -634,6 +890,8 @@ def approve_host(host_id: int, db: Session = Depends(get_db), current_admin: mod
     profile.status = "APPROVED"
     profile.phone_verified = True
     profile.user.is_host = True
+    notify(db, profile.user_id, "You're a host now 🎉",
+           "Your host application was approved. Set up your profile and publish your first listing.", "/host/dashboard")
     db.commit()
     return {"id": profile.id, "status": profile.status}
 
@@ -644,6 +902,8 @@ def reject_host(host_id: int, db: Session = Depends(get_db), current_admin: mode
         raise HTTPException(status_code=404, detail="Host application not found")
     profile.status = "REJECTED"
     profile.user.is_host = False
+    notify(db, profile.user_id, "Host application update",
+           "Your host application wasn't approved this time. You can update your details and reapply.", "/host/onboarding/apply")
     db.commit()
     return {"id": profile.id, "status": profile.status}
 
